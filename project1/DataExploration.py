@@ -6,12 +6,20 @@ import matplotlib.pyplot as plt
 
 #load data from a csv file
 def load_data(file_name):
+    """Load data from a csv file.
+    The csv file should be in the data/dataset/ folder relative to this file.
+
+    input:
+    file_name: str, name of the csv file
+    output:
+    data: numpy array of shape (n_samples, n_features)
+    """
     dir_path = os.path.dirname(os.path.realpath(__file__))+'/data/dataset/'
     data = np.array(np.genfromtxt(dir_path+file_name, delimiter=','))
     return data
 
 
-def assess_missing_data(data): 
+def assess_missing_features(data): 
     """Assess the percentage of missing data for each feature in the dataset.
 
     input:
@@ -26,19 +34,6 @@ def assess_missing_data(data):
         missing_data.append(missing_percentage)
     return missing_data
 
-
-
-def plot_missing_data(missing_data, title):
-    print(np.mean(missing_data))  # Print average percentage of missing data across all features
-    print(np.median(missing_data))  # Print median percentage of missing data across all features
-    plt.hist(missing_data, bins=20)
-    plt.title(title)
-    plt.xlabel("Percentage of missing data")
-    plt.ylabel("Occurences")
-    plt.show()
-
-
-
 def remove_missing_features(data, threshold=0.8):
     """Remove features with a percentage of missing data above a certain threshold.
 
@@ -49,13 +44,13 @@ def remove_missing_features(data, threshold=0.8):
     output:
     data: numpy array of shape (n_samples, n_features_removed)
     """
-    missing_data = assess_missing_data(data)
+    missing_data = assess_missing_features(data)
     features_to_keep = [i for i, missing in enumerate(missing_data) if missing <= threshold]
     features_to_remove = [i for i, missing in enumerate(missing_data) if missing > threshold]
     return data[:, features_to_keep], features_to_remove
 
 
-def assess_missing_points(data, threshold=0.8):
+def assess_missing_data_points(data, threshold=0.8):
     """Assess the percentage of missing features for each sample in the dataset.
 
     input:
@@ -81,9 +76,11 @@ def remove_missing_data_points(data, threshold=0.5):
     output:
     data: numpy array of shape (n_samples_removed, n_features)
     """
-    missing_data = assess_missing_points(data)
+    missing_data = assess_missing_data_points(data)
+    above_threshold = [i for i, missing in enumerate(missing_data) if missing > threshold]
     points_to_keep = [i for i, missing in enumerate(missing_data) if missing <= threshold]
     points_to_remove = [i for i, missing in enumerate(missing_data) if missing > threshold]
+    
     return data[points_to_keep, :], points_to_remove
 
 
@@ -99,15 +96,23 @@ def fill_missing_data_mode(data):
 
     for i in range(data.shape[1]):
         column = data[:, i]
-        if np.all(np.isnan(column)):
-            continue  # Skip if all values are NaN
-        values, counts = np.unique(column[~np.isnan(column)], return_counts=True)
-        mode = values[np.argmax(counts)]
-        column[np.isnan(column)] = mode
-        data[:, i] = column
+        data[:, i] = fill_column_mode(column)
     return data
 
-    
+def fill_column_mode(column):
+    """Fill missing data in a single column with the mode of that column.
+
+    input:
+    column: numpy array of shape (n_samples,) with some np.nan values
+    output:
+    column: numpy array of shape (n_samples,) with np.nan values filled with the mode of the column
+    """ 
+    if np.all(np.isnan(column)):
+        return column
+    values, counts = np.unique(column[~np.isnan(column)], return_counts=True)
+    mode = values[np.argmax(counts)]
+    column[np.isnan(column)] = mode
+    return column
 
 
 def fill_missing_data_0(data):
@@ -123,20 +128,129 @@ def fill_missing_data_0(data):
     return data
 
 
+def get_variance(data):
+    """Get the variance of each feature in the dataset.
+
+    input:
+    data: numpy array of shape (n_samples, n_features)
+
+    output:
+    variance: list of length n_features, where each element is the variance of that feature
+    """
+    variance = []
+    for column in data.T:
+        variance.append(np.nanvar(column))
+    return variance
+
+
+
+def plot_missing_data(missing_data, title):
+    print(np.mean(missing_data))  # Print average percentage of missing data across all features
+    print(np.median(missing_data))  # Print median percentage of missing data across all features
+    plt.hist(missing_data, bins=20)
+    plt.title(title)
+    plt.xlabel("Percentage of missing data")
+    plt.ylabel("Occurences")
+    plt.show()
+
+def normalize_feature(column):
+    """ Normalize one olumn of the data (one feature) to have mean 0 and variance 1.
+    input:
+    column: numpy array of shape (n_samples,)
+    output:
+    column: numpy array of shape (n_samples,) normalized
+    """
+    mean = np.mean(column)
+    std = np.std(column)
+    if std == 0:
+        return column - mean
+    return (column - mean) / std
+
+
+
+def fill_data(data, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True):
+    """ Pre-process the data before feeding it to the model.
+    Fill features that have only one type of value (except np.nan) with 0.
+    Fill remaining missing data with the mode of the feature.
+    Optionally normalize the data to have mean 0 and variance 1.
+    Remove data points or features with percentage of missing data above a certain threshold if threshold is True (for training data).
+    Remove specified features and data points if remove_features and remove_points are not empty (for test data).
+
+    input:
+    data: numpy array of shape (n_samples, n_features)
+    remove_features: list of int, indices of features to remove
+    remove_points: list of int, indices of data points to remove
+    threshold_features: float, percentage of missing data above which a feature is removed
+    threshold_points: float, percentage of missing features above which a data point is removed
+    normalize: bool, whether to normalize the data to have mean 0 and variance 1
+
+    output:
+    data: numpy array of shape (n_samples_removed, n_features_removed), final pre-processed data
+    removed_features: list of int, indices of features that were removed
+    removed_points: list of int, indices of data points that were removed
+    """
+    #Remove specified features and points
+    data = np.delete(data, remove_features, axis=1)
+    data = np.delete(data, remove_points, axis=0)
+
+    if threshold: # remove features and points based on threshold
+        data, removed_features = remove_missing_features(data, threshold=threshold_features)
+        data, removed_points = remove_missing_data_points(data, threshold=threshold_points)
+    else: # do not remove features and points based on threshold
+        removed_features = []
+        removed_points = []
+
+
+    for i in range(data.shape[1]):
+
+        column = data[:, i]
+
+        if np.all(np.isnan(column)): # if all values are np.nan, skip
+            continue
+
+        if np.all(~np.isnan(column)): # if there is no missing data, skip
+            if normalize:
+                column = normalize_feature(column)
+            data[:, i] = column
+            continue
+
+        unique_values = np.unique(column[~np.isnan(column)]) # unique values excluding np.nan
+        if len(unique_values) == 1: # check if there is only one unique value (except np.nan)
+            column = fill_missing_data_0(column)
+
+        else:
+            column = fill_column_mode(column) 
+        
+
+        if normalize:
+            column = normalize_feature(column)
+        
+        data[:, i] = column
+
+    return data, removed_features, removed_points
+
+
 
 if __name__ == "__main__":
     
     x_train = load_data('x_train.csv')
-    plot_missing_data(assess_missing_data(x_train), title="Percentage of missing data per feature")
-    plot_missing_data(assess_missing_points(x_train), title="Percentage of missing features per data point")
+    x_test = load_data('x_test.csv')
+    y_train = load_data('y_train.csv')
 
-    for i in [0.8, 0.9, 0.95, 0.99]:
-        x_train_reduced, removed_features = remove_missing_features(x_train, threshold=i)
-        print(f"Threshold: {i}, Removed features: {len(removed_features)}")
+    filled_x_train, removed_features, removed_points = fill_data(x_train, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True)
+    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_train_f09-p06-n.csv', filled_x_train, delimiter=',')
 
-    for i in [0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7]:
-        x_train_reduced, removed_points = remove_missing_data_points(x_train, threshold=i)
-        print(f"Threshold: {i}, Removed data points: {len(removed_points)}")
-    
+    # remove the same features and points from x_test as were removed from x_train
+    filled_x_test, _, _ = fill_data(x_test, remove_features = removed_features, remove_points = removed_points, threshold = False, normalize=True)
+    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_test_f09-p06-n.csv', filled_x_test, delimiter=',')
 
-        
+    # remove the same points from y_train as were removed from x_train
+    y_train, _ = remove_missing_data_points(y_train, threshold=0.6)
+    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_y_train_f09-p06-n.csv', y_train, delimiter=',')
+
+    # Print the shape of the processed data to verify that the number of features and points match
+    print(filled_x_train.shape)
+    print(filled_x_test.shape)
+    print(y_train.shape)
+
+
