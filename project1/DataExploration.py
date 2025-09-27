@@ -170,12 +170,12 @@ def normalize_feature(column):
 
 def fill_data(data, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True):
     """ Pre-process the data before feeding it to the model.
+    Remove data points or features with percentage of missing data above a certain threshold if threshold is True (for training data).
+    Remove specified features and data points if remove_features and remove_points are not empty (for test data).
     Fill features that have only one type of value (except np.nan) with 0.
     Fill remaining missing data with the mode of the feature.
     Optionally normalize the data to have mean 0 and variance 1.
-    Remove data points or features with percentage of missing data above a certain threshold if threshold is True (for training data).
-    Remove specified features and data points if remove_features and remove_points are not empty (for test data).
-
+    
     input:
     data: numpy array of shape (n_samples, n_features)
     remove_features: list of int, indices of features to remove
