@@ -304,6 +304,7 @@ def CrossValidation(y: np.ndarray, x: np.ndarray, k_fold: int, seed: int,model, 
         errorTest,errorTrain = CrossValidation1Fold(y,x,k_fold,seed,model,**model_kwargs)
         errorsTest.append(errorTest)
         errorsTrain.append(errorTrain)
+
     return errorsTest,errorsTrain
 
 
