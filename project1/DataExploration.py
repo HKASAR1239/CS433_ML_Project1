@@ -142,6 +142,26 @@ def get_variance(data):
         variance.append(np.nanvar(column))
     return variance
 
+def IQR(data,factor=1.5):
+    """Remove outliers by applying IQR method : computes the 25th and 75th percentile, then form bounds
+
+        Input : numpy array of shape (n_samples,n_features)
+
+        Output : numpy array filtered without the outliers
+    """
+    # Compute percentiles and IQR 
+    Q1 = np.percentile(data,0.25,axis=0)
+    Q3 = np.percentile(data,0.75,axis=0)
+    IQR = Q3-Q1
+
+    # Determine the bounds
+    lowerBound = Q1 - factor * IQR
+    upperBound = Q3 + factor * IQR
+
+    # Filtering 
+    mask = np.all((data <= upperBound) & (data >= lowerBound),axis=1)
+    return data[mask]
+
 
 
 def plot_missing_data(missing_data, title):
@@ -168,7 +188,7 @@ def normalize_feature(column):
 
 
 
-def fill_data(data, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True):
+def fill_data(data, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True,remove_outliers=True):
     """ Pre-process the data before feeding it to the model.
     Remove data points or features with percentage of missing data above a certain threshold if threshold is True (for training data).
     Remove specified features and data points if remove_features and remove_points are not empty (for test data).
@@ -226,6 +246,8 @@ def fill_data(data, remove_features = [], remove_points = [], threshold = True, 
             column = normalize_feature(column)
         
         data[:, i] = column
+    if remove_outliers:
+        data = IQR(data)
 
     return data, removed_features, removed_points
 
