@@ -42,4 +42,4 @@ This will:
 
 ## Team
 
-Gabriel TAIEB, Aurel Bizeau & Alexia Möller
+Gabriel Taieb, Aurel Bizeau & Alexia Möller
