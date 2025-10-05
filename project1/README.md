@@ -5,7 +5,7 @@ Machine Learning course project (EPFL CS-433, Fall 2025) - Binary classification
 ## Quick Setup
 
 ```bash
-python3 -m venv project1
+python3 -m venv venv_project1
 source project1/bin/activate
 pip install -r requirements.txt
 ```

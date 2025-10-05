@@ -11,9 +11,7 @@ dist/
 build/
 
 # Virtual environment
-project1/
-venv/
-env/
+venv_project1/
 
 # macOS
 .DS_Store
