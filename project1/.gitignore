@@ -1,3 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+project1/
+venv/
+env/
+
+# macOS
 .DS_Store
-project1/.DS_Store
-project1/data/.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Project specific
+submission.csv
+*.~lock.*
+
+# Data (if large, otherwise keep for reproducibility)
+# data/dataset/*.csv

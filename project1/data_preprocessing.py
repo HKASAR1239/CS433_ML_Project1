@@ -1,6 +1,6 @@
 import os
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 import helpers as hl
 import implementations
 import DataExploration as DE
