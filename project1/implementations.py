@@ -1,5 +1,6 @@
 from __future__ import annotations
 import numpy as np
+from numba import njit
 
 
 # ---------- helpers (MSE) ----------
@@ -26,7 +27,7 @@ def _mse_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
 
 
 # ---------- helpers (logistic) ----------
-
+@njit
 def _sigmoid(z: np.ndarray) -> np.ndarray:
     """
     Sigmoid function.
@@ -40,6 +41,7 @@ def _sigmoid(z: np.ndarray) -> np.ndarray:
     out[neg] = ez / (1.0 + ez)
     return out
 
+@njit
 def _logistic_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     """
     Average negative log-likelihood for labels y ∈ {0,1}:
@@ -49,6 +51,7 @@ def _logistic_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     z = tx @ w
     return np.mean(np.logaddexp(0.0, z) - y * z)
 
+@njit
 def _logistic_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
     """
     Gradient of the average NLL:
@@ -151,7 +154,7 @@ def ridge_regression(y: np.ndarray, tx: np.ndarray, lambda_: float):
     w = np.linalg.solve(A, b)
     return w, _mse_loss(y, tx, w)
 
-
+@njit
 def logistic_regression(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float):
     """
     Logistic regression (y ∈ {0,1}) using gradient descent on the average NLL.
@@ -169,7 +172,7 @@ def logistic_regression(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, ma
 
     return w, _logistic_loss(y, tx, w)
 
-
+@njit
 def reg_logistic_regression(y: np.ndarray, tx: np.ndarray, lambda_: float, initial_w: np.ndarray, max_iters: int
                             ,gamma: float):
     """
@@ -182,9 +185,11 @@ def reg_logistic_regression(y: np.ndarray, tx: np.ndarray, lambda_: float, initi
     Returns:
         (w, loss) where loss is the final average NLL.
     """
-    y = _as_1d(y)
+    y = np.ravel(y)  # replaces _as_1d
+    w = initial_w.copy()
+    #y = _as_1d(y)
     tx = np.asarray(tx, dtype=np.float64)
-    w = _as_1d(initial_w).copy()
+    #w = _as_1d(initial_w).copy()
 
     for _ in range(int(max_iters)):
         grad = _logistic_grad(y, tx, w) + 2.0 * lambda_ * w
