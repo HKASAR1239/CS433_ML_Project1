@@ -17,6 +17,10 @@ def _mse_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     e = y - tx @ w
     return 0.5 * np.mean(e * e)
 
+def _rmse_loss(y: np.ndarray,tx: np.ndarray, w:np.ndarray) -> float:
+    """RMSE error"""
+    return np.sqrt(2 * _mse_loss(y,tx,w))
+
 def _mse_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
     """
     Gradient of the average MSE:
@@ -99,7 +103,8 @@ def mean_squared_error_sgd(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray,
     tx = np.asarray(tx, dtype=np.float64)
     w = _as_1d(initial_w).copy()
 
-    n = y.size
+    #n = y.size
+    n = tx.shape[0]
     for _ in range(int(max_iters)):
         i = int(rng.integers(0, n))
         xi = tx[i]            # shape (D,)
@@ -152,7 +157,7 @@ def ridge_regression(y: np.ndarray, tx: np.ndarray, lambda_: float):
     A = tx.T @ tx + (2.0 * n * lambda_) * np.eye(d, dtype=np.float64)
     b = tx.T @ y
     w = np.linalg.solve(A, b)
-    return w, _mse_loss(y, tx, w)
+    return w, _rmse_loss(y, tx, w)
 
 @njit
 def logistic_regression(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float):

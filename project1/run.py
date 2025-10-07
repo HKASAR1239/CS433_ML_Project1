@@ -105,6 +105,326 @@ def compute_f1_score(y_train_binary,x_train_bias,weights,threshold = 0.2):
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
     return f1
 
+def continuous_to_class(pred_cont,threshold =0.2):
+    return np.where(pred_cont >= threshold, 1, -1)
+
+# Basic confusion counts (expects y_true and y_pred in {-1,1})
+def compute_f1_score_ridge(y_true, X, weights, threshold=0.0):
+    """
+    Compute F1 score for ridge regression treated as classification.
+
+    Inputs:
+      - y_true: np.ndarray of shape (n_samples,) with labels in {-1, 1}
+      - X: np.ndarray of shape (n_samples, n_features)
+      - weights: np.ndarray of shape (n_features,)
+      - threshold: float, default=0.0 — classification threshold on raw predictions
+
+    Returns:
+      - f1: float — F1 score
+    """
+    # Continuous predictions
+    y_pred_cont = X @ weights
+    # Convert to binary {-1, 1}
+    y_pred = np.where(y_pred_cont >= threshold, 1, -1)
+
+    # Compute F1 score
+    tp = np.sum((y_pred == 1) & (y_true == 1))
+    fp = np.sum((y_pred == 1) & (y_true == -1))
+    fn = np.sum((y_pred == -1) & (y_true == 1))
+
+    print(tp,fp,fn)
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+    return f1
+
+def train_mean_square_error_gd(
+        y_train,
+        x_train,
+        x_test,
+        test_ids,
+        gammas = [0.1],
+        max_iters = 2000,
+        k_fold = 4,
+        seed = 42):
+    """
+    Train a MSE with gradient descent model with hyperparameter tuning
+    using k-fold cross-validation, then generate predictions for the test set.
+
+    This function:
+      1. Prepares the data (adds bias, converts labels to {0, 1})
+      2. Performs cross-validation over a grid of (lambda, gamma)
+      3. Selects the combination yielding the best mean F1 score
+      4. Retrains the final model on the full training set with best parameters
+      5. Generates and saves predictions for the test set
+
+    Input  : - y_train : np.ndarray : Training labels, shape (N,) with values in {-1, 1}.
+             - x_train : np.ndarray : Training features, shape (N, D).
+             - x_test : np.ndarray : Test features, shape (M, D) (no labels).
+             - test_ids : np.ndarray : Indices of the the test features.
+             - gammas : list of float, optional : Learning rates to test during cross-validation.
+             - max_iters : int, optional :Maximum number of iterations for gradient descent.
+             - k_fold : int, optional : Number of folds for cross-validation.
+             - seed : int, optional : Random seed for reproducibility.
+    """
+    threshold = 0.0
+    # Prepare data for logistic regression
+    print("\nPreparing data for MSE SGD...")
+    # Add bias term (column of ones) to features
+    x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
+    x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
+    print(f"Training data with bias: {x_train_bias.shape}")
+    print(f"Test data with bias: {x_test_bias.shape}")
+
+    # Initialize weights 
+    initial_w = np.zeros(x_train_bias.shape[1])
+
+    # Compute k indices for k-folding
+    k_indices = de.build_k_indices(y_train,k_fold,seed)
+
+    # Cross validation over lambdas 
+    best_loss = float('inf')
+    best_gamma = None
+
+    for gamma in gammas:
+        print("Running for gamma = ",gamma)
+        losses = []
+        for k in range(k_fold):
+            # Split into training/validation
+            val_idx = k_indices[k]
+            train_idx = np.delete(np.arange(y_train.shape[0]), val_idx)
+            X_tr, X_val = x_train_bias[train_idx], x_train_bias[val_idx]
+            y_tr, y_val = y_train[train_idx], y_train[val_idx]
+
+            # Train model on this fold
+            w, loss = impl.mean_squared_error_gd(
+                y_tr,
+                X_tr,
+                initial_w = initial_w,
+                max_iters = max_iters,
+                gamma = gamma,
+            )
+            # Predictions on validation sets
+            losses.append(loss)
+        # Check quality of parameters
+        local_loss = np.mean(losses)
+        if local_loss < best_loss:
+            best_loss = local_loss
+            best_gamma = gamma
+    print(" best gamma :",gamma)
+    # Compute weights and loss using optimal hyperparamaters to generate submission file. 
+    print(f"Training loss score : {best_loss:.3f}")
+    final_w,final_loss = impl.mean_squared_error_gd(
+        y_train,
+        x_train_bias,
+        initial_w = initial_w,
+        max_iters = max_iters,
+        gamma = best_gamma)
+    # Predictions
+    print("\nGenerating predictions...")
+    #Training accuracy 
+    y_train_pred = x_train_bias @ final_w
+    y_train_pred_binary = np.where(y_train_pred >= threshold, 1, -1)
+    train_accuracy = np.mean(y_train_pred_binary == y_train)     
+    print("Optimal train accuracy :",train_accuracy)
+    # Predict probabilities
+    y_test_pred_cont = x_test_bias @ final_w
+
+
+    y_test_pred = np.where(y_test_pred_cont >= threshold, 1, -1)
+
+    # Submission file
+    print("\nCreating submission file...")
+    output_path = "submission.csv"
+    hl.create_csv_submission(test_ids, y_test_pred, output_path)
+    print(f"Submission file at : {output_path}")
+    
+def train_mean_square_error_sgd(
+        y_train,
+        x_train,
+        x_test,
+        test_ids,
+        gammas = [0.1],
+        max_iters = 2000,
+        k_fold = 4,
+        seed = 42):
+    """
+    Train a MSE with gradient descent model with hyperparameter tuning
+    using k-fold cross-validation, then generate predictions for the test set.
+
+    This function:
+      1. Prepares the data (adds bias, converts labels to {0, 1})
+      2. Performs cross-validation over a grid of (lambda, gamma)
+      3. Selects the combination yielding the best mean F1 score
+      4. Retrains the final model on the full training set with best parameters
+      5. Generates and saves predictions for the test set
+
+    Input  : - y_train : np.ndarray : Training labels, shape (N,) with values in {-1, 1}.
+             - x_train : np.ndarray : Training features, shape (N, D).
+             - x_test : np.ndarray : Test features, shape (M, D) (no labels).
+             - test_ids : np.ndarray : Indices of the the test features.
+             - gammas : list of float, optional : Learning rates to test during cross-validation.
+             - max_iters : int, optional :Maximum number of iterations for gradient descent.
+             - k_fold : int, optional : Number of folds for cross-validation.
+             - seed : int, optional : Random seed for reproducibility.
+    """
+    threshold = 0.0
+    # Prepare data for logistic regression
+    print("\nPreparing data for MSE SGD...")
+    # Add bias term (column of ones) to features
+    x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
+    x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
+    print(f"Training data with bias: {x_train_bias.shape}")
+    print(f"Test data with bias: {x_test_bias.shape}")
+
+    # Initialize weights 
+    initial_w = np.zeros(x_train_bias.shape[1])
+
+    # Compute k indices for k-folding
+    k_indices = de.build_k_indices(y_train,k_fold,seed)
+
+    # Cross validation over lambdas 
+    best_loss = float('inf')
+    best_gamma = None
+
+    for gamma in gammas:
+        print("Running for gamma = ",gamma)
+        losses = []
+        for k in range(k_fold):
+            # Split into training/validation
+            val_idx = k_indices[k]
+            train_idx = np.delete(np.arange(y_train.shape[0]), val_idx)
+            X_tr, X_val = x_train_bias[train_idx], x_train_bias[val_idx]
+            y_tr, y_val = y_train[train_idx], y_train[val_idx]
+
+            # Train model on this fold
+            w, loss = impl.mean_squared_error_sgd(
+                y_tr,
+                X_tr,
+                initial_w = initial_w,
+                max_iters = max_iters,
+                gamma = gamma,
+            )
+            # Predictions on validation sets
+            losses.append(loss)
+        # Check quality of parameters
+        local_loss = np.mean(losses)
+        print(local_loss)
+        if local_loss < best_loss:
+            best_loss = local_loss
+            best_gamma = gamma
+    print(" best gamma :",gamma)
+    # Compute weights and loss using optimal hyperparamaters to generate submission file. 
+    print(f"Training loss score : {best_loss:.3f}")
+    final_w,final_loss = impl.mean_squared_error_sgd(
+        y_train,
+        x_train_bias,
+        initial_w = initial_w,
+        max_iters = max_iters,
+        gamma = best_gamma)
+    # Predictions
+    print("\nGenerating predictions...")
+    #Training accuracy 
+    y_train_pred = x_train_bias @ final_w
+    y_train_pred_binary = np.where(y_train_pred >= threshold, 1, -1)
+    train_accuracy = np.mean(y_train_pred_binary == y_train)     
+    print("Optimal train accuracy :",train_accuracy)
+    # Predict probabilities
+    y_test_pred_cont = x_test_bias @ final_w
+
+
+    y_test_pred = np.where(y_test_pred_cont >= threshold, 1, -1)
+
+    # Submission file
+    print("\nCreating submission file...")
+    output_path = "submission.csv"
+    hl.create_csv_submission(test_ids, y_test_pred, output_path)
+    print(f"Submission file at : {output_path}")
+    
+def train_least_squares(
+        y_train,
+        x_train,
+        x_test,
+        test_ids,
+        k_fold = 4,
+        seed = 42):
+    """
+    Train a MSE with gradient descent model with hyperparameter tuning
+    using k-fold cross-validation, then generate predictions for the test set.
+
+    This function:
+      1. Prepares the data (adds bias, converts labels to {0, 1})
+      2. Performs cross-validation over a grid of (lambda, gamma)
+      3. Selects the combination yielding the best mean F1 score
+      4. Retrains the final model on the full training set with best parameters
+      5. Generates and saves predictions for the test set
+
+    Input  : - y_train : np.ndarray : Training labels, shape (N,) with values in {-1, 1}.
+             - x_train : np.ndarray : Training features, shape (N, D).
+             - x_test : np.ndarray : Test features, shape (M, D) (no labels).
+             - test_ids : np.ndarray : Indices of the the test features.
+             - gammas : list of float, optional : Learning rates to test during cross-validation.
+             - max_iters : int, optional :Maximum number of iterations for gradient descent.
+             - k_fold : int, optional : Number of folds for cross-validation.
+             - seed : int, optional : Random seed for reproducibility.
+    """
+    threshold = 0.2
+    # Prepare data for logistic regression
+    print("\nPreparing data for logistic regression...")
+    # Add bias term (column of ones) to features
+    x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
+    x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
+    print(f"Training data with bias: {x_train_bias.shape}")
+    print(f"Test data with bias: {x_test_bias.shape}")
+
+
+    # Compute k indices for k-folding
+    k_indices = de.build_k_indices(y_train,k_fold,seed)
+
+    # Cross validation over lambdas 
+    losses = []
+    for k in range(k_fold):
+        # Split into training/validation
+        val_idx = k_indices[k]
+        train_idx = np.delete(np.arange(y_train.shape[0]), val_idx)
+        X_tr, X_val = x_train_bias[train_idx], x_train_bias[val_idx]
+        y_tr, y_val = y_train[train_idx], y_train[val_idx]
+
+        # Train model on this fold
+        w, loss = impl.least_squares(
+            y_tr,
+            X_tr
+        )
+        # Predictions on validation sets
+        losses.append(loss)
+    # Check quality of parameters
+    local_loss = np.mean(losses)
+    print(f"Training loss score : {local_loss:.3f}")
+    # Compute weights and loss using optimal hyperparamaters to generate submission file. 
+    final_w,final_loss = impl.least_squares(
+        y_train,
+        x_train_bias)
+    
+    # Predictions
+    print("\nGenerating predictions...")
+    #Training accuracy 
+    y_train_pred = x_train_bias @ final_w
+    y_train_pred_binary = np.where(y_train_pred >= threshold, 1, -1)
+    train_accuracy = np.mean(y_train_pred_binary == y_train)     
+    print("Optimal train accuracy :",train_accuracy)
+    # Predict probabilities
+    y_test_pred_cont = x_test_bias @ final_w
+
+
+    y_test_pred = np.where(y_test_pred_cont >= threshold, 1, -1)
+
+    # Submission file
+    print("\nCreating submission file...")
+    output_path = "submission.csv"
+    hl.create_csv_submission(test_ids, y_test_pred, output_path)
+    print(f"Submission file at : {output_path}")
+
 def train_reg_logistic_regression(
         y_train,
         x_train,
@@ -355,37 +675,28 @@ def train_ridge_regression(
     threshold = 0.2
     # Prepare data for logistic regression
     print("\nPreparing data for logistic regression...")
-    # Convert labels from {-1, 1} to {0, 1} for logistic regression
-    y_train_binary = (y_train + 1) / 2  
-    y_train_binary = y_train_binary.astype(int)
-    print(f"Label distribution: {np.bincount(y_train_binary)}")
-    print(f"Class 0: {np.sum(y_train_binary == 0)} samples")
-    print(f"Class 1: {np.sum(y_train_binary == 1)} samples")
     # Add bias term (column of ones) to features
     x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
     x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
     print(f"Training data with bias: {x_train_bias.shape}")
     print(f"Test data with bias: {x_test_bias.shape}")
 
-    # Initialize weights 
-    initial_w = np.zeros(x_train_bias.shape[1])
-
     # Compute k indices for k-folding
     k_indices = de.build_k_indices(y_train,k_fold,seed)
 
-    # Cross validation over lambdas and gammas
-    best_f1_score = 0.0
+    # Cross validation over lambdas 
     best_lambda = None
+    best_loss = float('inf')
 
     for lambda_ in lambdas:
         print("Running for lambda = ",lambda_)
-        f1_scores = []
+        losses = []
         for k in range(k_fold):
             # Split into training/validation
             val_idx = k_indices[k]
-            train_idx = np.delete(np.arange(y_train_binary.shape[0]), val_idx)
+            train_idx = np.delete(np.arange(y_train.shape[0]), val_idx)
             X_tr, X_val = x_train_bias[train_idx], x_train_bias[val_idx]
-            y_tr, y_val = y_train_binary[train_idx], y_train_binary[val_idx]
+            y_tr, y_val = y_train[train_idx], y_train[val_idx]
 
             # Train model on this fold
             w, loss = impl.ridge_regression(
@@ -394,40 +705,43 @@ def train_ridge_regression(
                 lambda_=lambda_,
             )
             # Predictions on validation sets
-            f1 = compute_f1_score(y_val,X_val,w,threshold)
-            f1_scores.append(f1)
+            losses.append(loss)
         # Check quality of parameters
-        f1_score = np.mean(f1_scores)
-        if f1_score > best_f1_score:
-            best_f1_score = f1_score
+        local_loss = np.mean(loss)
+        if local_loss < best_loss:
+            best_loss = local_loss
             best_lambda = lambda_
     print(" best lambda :",best_lambda)
     # Compute weights and loss using optimal hyperparamaters to generate submission file. 
-    print(f"Training F1 score: {best_f1_score:.3f}")
+    print(f"Training loss score (RMSE) : {best_loss:.3f}")
     final_w,final_loss = impl.ridge_regression(
-        y_train_binary,
+        y_train,
         x_train_bias,
         lambda_ = best_lambda)
-    
     # Predictions
     print("\nGenerating predictions...")
+    #Training accuracy 
+    y_train_pred = x_train_bias @ final_w
+    y_train_pred_binary = np.where(y_train_pred >= threshold, 1, -1)
+    train_accuracy = np.mean(y_train_pred_binary == y_train)     
+    print("Optimal train accuracy :",train_accuracy)
     # Predict probabilities
-    z_test = x_test_bias @ final_w
-    y_pred_prob = impl._sigmoid(z_test)
-    # Convert probabilities to binary predictions
-    y_pred_binary = (y_pred_prob >= 0.2).astype(int)
-    # Convert back to {-1, 1} format for submission
-    y_pred = 2 * y_pred_binary - 1
+    y_test_pred_cont = x_test_bias @ final_w
+
+
+    y_test_pred = np.where(y_test_pred_cont >= threshold, 1, -1)
 
     # Submission file
     print("\nCreating submission file...")
     output_path = "submission.csv"
-    hl.create_csv_submission(test_ids, y_pred, output_path)
+    hl.create_csv_submission(test_ids, y_test_pred, output_path)
     print(f"Submission file at : {output_path}")
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, remove_outliers = False)
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, remove_outliers = True)
 
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids)
+
+train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,gammas = [1e-5,1e-4,1e-3],max_iters = 5000,k_fold =10)
 """
 dir_path = os.path.dirname(os.path.realpath(__file__)) + '/data/dataset/'
 
