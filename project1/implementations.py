@@ -197,7 +197,9 @@ def reg_logistic_regression(y: np.ndarray, tx: np.ndarray, lambda_: float, initi
     #w = _as_1d(initial_w).copy()
 
     for _ in range(int(max_iters)):
-        grad = _logistic_grad(y, tx, w) + 2.0 * lambda_ * w
+        #grad = _logistic_grad(y, tx, w) + 2.0 * lambda_ * w
+        grad = _logistic_grad(y, tx, w)
+        grad[1:] += 2 * lambda_ * w[1:] 
         w -= gamma * grad
 
     return w, _logistic_loss(y, tx, w)

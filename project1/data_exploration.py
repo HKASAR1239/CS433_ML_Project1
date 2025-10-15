@@ -50,7 +50,6 @@ def remove_missing_features(data, threshold=0.8):
     features_to_remove = [i for i, missing in enumerate(missing_data) if missing > threshold]
     return data[:, features_to_keep], features_to_remove
 
-
 def assess_missing_data_points(data, threshold=0.8):
     """Assess the percentage of missing features for each sample in the dataset.
 
@@ -143,25 +142,101 @@ def get_variance(data):
         variance.append(np.nanvar(column))
     return variance
 
-def IQR(data,factor=1.5):
-    """Remove outliers by applying IQR method : computes the 25th and 75th percentile, then form bounds
-
-        Input : numpy array of shape (n_samples,n_features)
-
-        Output : numpy array filtered without the outliers
+def correlation_matrix_features(data,threshold =0.9):
     """
-    # Compute percentiles and IQR 
-    Q1 = np.percentile(data,0.25,axis=0)
-    Q3 = np.percentile(data,0.75,axis=0)
-    IQR = Q3-Q1
+    Return the matrix of correlation of features for a dataset
+    """
+    corr_matrix = np.corrcoef(data,rowvar = False)
+    return corr_matrix
 
-    # Determine the bounds
-    lowerBound = Q1 - factor * IQR
-    upperBound = Q3 + factor * IQR
+def find_corr_clusters(corr_matrix, threshold=0.9):
+    """
+    Given a correlation matrix, returns clusters of features.
+    """
+    n_features = corr_matrix.shape[0]
+    clusters = []
+    visited = set()
 
-    # Filtering 
-    mask = np.all((data <= upperBound) & (data >= lowerBound),axis=1)
-    return data[mask]
+    for i in range(n_features):
+        if i in visited:
+            continue
+        cluster = set([i])
+        for j in range(i+1, n_features):
+            if abs(corr_matrix[i,j]) > threshold:
+                cluster.add(j)
+        if len(cluster) > 1:
+            clusters.append(cluster)
+        visited.update(cluster)
+    return clusters
+
+def merge_correlated_features(data,threshold=0.9,verbose = True):
+    """
+    Merge correlated features by averaging them.
+    """
+    corr_matrix = correlation_matrix_features(data, threshold)
+    clusters = find_corr_clusters(corr_matrix, threshold=threshold)
+
+    X_new = data.copy()
+    features_removed = []
+
+    for cluster in clusters:
+        cluster_indices = list(cluster)  # convert set → list of ints
+        merged_feature = np.mean(X_new[:, cluster_indices], axis=1)
+        X_new = np.hstack([X_new, merged_feature.reshape(-1,1)])
+        features_removed.extend(cluster_indices)
+
+    # Optionally remove original features that were merged
+    X_new = np.delete(X_new, features_removed, axis=1)
+
+    if verbose:
+        print(f"Merged {len(clusters)} clusters of correlated features.")
+        print(f"Removed {len(features_removed)} original features.")
+
+    return X_new,removed_features
+
+def IQR(data, factor=1.5):
+    """
+    Remove outliers using IQR method. First handles obvious placeholder values,
+    then applies statistical outlier detection.
+    
+    Input: numpy array of shape (n_samples, n_features)
+    Output: numpy array with outliers replaced by NaN
+    """
+    data = data.copy()
+    
+    # Step 1: Replace obvious missing data placeholders FIRST
+    placeholder_values = [-999, -999999, 999999, -9999, 99999]
+    for placeholder in placeholder_values:
+        data[data == placeholder] = np.nan
+    
+    # Step 2: Replace extreme values (likely data errors)
+    data[np.abs(data) > 1e5] = np.nan
+    
+    initial_nans = np.isnan(data).sum()
+    
+    # Step 3: Apply IQR on remaining valid data
+    Q1 = np.nanpercentile(data, 25, axis=0)
+    Q3 = np.nanpercentile(data, 75, axis=0)
+    IQR_val = Q3 - Q1
+    
+    lowerBound = Q1 - factor * IQR_val
+    upperBound = Q3 + factor * IQR_val
+    
+    # Mark statistical outliers as NaN
+    for i in range(data.shape[1]):
+        column = data[:, i]
+        # Only check non-NaN values
+        valid_mask = ~np.isnan(column)
+        outlier_mask = ((column < lowerBound[i]) | (column > upperBound[i])) & valid_mask
+        data[outlier_mask, i] = np.nan
+    
+    final_nans = np.isnan(data).sum()
+    print(f"IQR processing:")
+    print(f"  - Placeholders replaced: {initial_nans} values")
+    print(f"  - Statistical outliers marked: {final_nans - initial_nans} values")
+    print(f"  - Total NaN: {final_nans} ({final_nans/data.size*100:.2f}%)")
+    
+    return data
 
 
 
@@ -214,45 +289,126 @@ def fill_data(data, remove_features = [], remove_points = [], threshold = True, 
     data = np.delete(data, remove_features, axis=1)
     data = np.delete(data, remove_points, axis=0)
 
+    if remove_outliers:
+        data = IQR(data)
+
     if threshold: # remove features and points based on threshold
+
+        #data,removed_features_merged = merge_correlated_features(data,threshold = 0.9)
         data, removed_features = remove_missing_features(data, threshold=threshold_features)
-        data, removed_points = remove_missing_data_points(data, threshold=threshold_points)
+        data, removed_points = remove_missing_data_points(data, threshold=threshold_points) 
     else: # do not remove features and points based on threshold
         removed_features = []
         removed_points = []
 
+    
+    # for i in range(data.shape[1]):
 
+    #     column = data[:, i]
+
+    #     if np.all(np.isnan(column)): # if all values are np.nan, skip
+    #         continue
+
+    #     if np.all(~np.isnan(column)): # if there is no missing data, skip
+    #         if normalize:
+    #             column = normalize_feature(column)
+    #         data[:, i] = column
+    #         continue
+
+    #     unique_values = np.unique(column[~np.isnan(column)]) # unique values excluding np.nan
+    #     if len(unique_values) == 1: # check if there is only one unique value (except np.nan)
+    #         column = fill_missing_data_0(column)
+
+    #     else:
+    #         column = fill_column_mode(column) 
+        
+
+    #     if normalize:
+    #         column = normalize_feature(column)
+        
+    #     data[:, i] = column
+    print("Filling missing values...")
     for i in range(data.shape[1]):
-
-        column = data[:, i]
-
-        if np.all(np.isnan(column)): # if all values are np.nan, skip
+        column = data[:, i].copy()
+        
+        # Case 1: All NaN - fill with 0
+        if np.all(np.isnan(column)):
+            data[:, i] = 0
             continue
-
-        if np.all(~np.isnan(column)): # if there is no missing data, skip
+        
+        # Case 2: No NaN - just normalize if needed
+        if not np.any(np.isnan(column)):
             if normalize:
-                column = normalize_feature(column)
-            data[:, i] = column
+                data[:, i] = normalize_feature(column)
             continue
-
-        unique_values = np.unique(column[~np.isnan(column)]) # unique values excluding np.nan
-        if len(unique_values) == 1: # check if there is only one unique value (except np.nan)
-            column = fill_missing_data_0(column)
-
+        
+        # Case 3: Some NaN - fill them
+        unique_values = np.unique(column[~np.isnan(column)])
+        
+        if len(unique_values) == 1:
+            # Only one unique value - fill NaN with that value
+            data[:, i] = fill_missing_data_0(column)
         else:
-            column = fill_column_mode(column) 
+            # Multiple values - fill with mode
+            data[:, i] = fill_column_mode(column)
         
-
+        # Safety check: ensure no NaN remain
+        if np.any(np.isnan(data[:, i])):
+            print(f"Warning: Column {i} still has NaN, filling with median")
+            median_val = np.nanmedian(data[:, i])
+            data[:, i] = np.nan_to_num(data[:, i], nan=median_val if not np.isnan(median_val) else 0)
+        
+        # Step 5: Normalize after filling
         if normalize:
-            column = normalize_feature(column)
+            data[:, i] = normalize_feature(data[:, i])
+    
+    # Final safety check
+    assert not np.any(np.isnan(data)), "Data still contains NaN after fill_data!"
         
-        data[:, i] = column
-    if remove_outliers:
-        data = IQR(data)
 
     return data, removed_features, removed_points
 
 # ------------------------------------------------- FUNCTIONS FOR DATA PROCESSING ---------------------------------------------
+def identify_categorical_features(data, max_unique_ratio=0.05):
+    """
+    Identify which features are categorical vs continuous.
+    
+    A feature is considered categorical if:
+    1. It has a small number of unique values (< 5% of samples)
+    2. All values are integers
+    3. Has <= 20 unique values
+    
+    Input:
+        data: np.ndarray of shape (n_samples, n_features)
+        max_unique_ratio: float, max ratio of unique values to total samples
+    
+    Output:
+        categorical_mask: boolean array of shape (n_features,)
+    """
+    n_samples = data.shape[0]
+    n_features = data.shape[1]
+    categorical_mask = np.zeros(n_features, dtype=bool)
+    
+    for i in range(n_features):
+        feature = data[:, i]
+        unique_values = np.unique(feature)
+        n_unique = len(unique_values)
+        
+        # Check if all values are integers (or very close to integers)
+        is_integer = np.allclose(feature, np.round(feature))
+        
+        # Criteria for categorical:
+        # 1. Small number of unique values relative to sample size
+        # 2. Integer values
+        # 3. Absolute cap on unique values
+        is_few_unique = n_unique < max(20, n_samples * max_unique_ratio)
+        is_very_few = n_unique <= 20
+        
+        if (is_integer and is_few_unique) or is_very_few:
+            categorical_mask[i] = True
+            print(f"  Feature {i}: Categorical ({n_unique} unique values)")
+    
+    return categorical_mask
 
 def build_k_indices(y: np.ndarray, k_fold: int, seed: int):
     """build k indices for k-fold.
