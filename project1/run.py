@@ -20,7 +20,11 @@ LAMBDA = 0.001
 # best gamma / best lambda : 0.1 0.0001
 # Training F1 score: 0.413
 
+<<<<<<< HEAD
 def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, remove_outliers = False, aberrant_threshold = 10.0):
+=======
+def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, outlier_strategy = 'smart'):
+>>>>>>> 350be44b574d2686a3f125bed5f0f93c2038556e
     """
         Load the raw training and test data, preprocess it, and return cleaned datasets 
         ready for machine learning models. Handles missing values, feature removal, 
@@ -47,15 +51,15 @@ def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = Tr
 
     #Preprocessing Data
     print("\nPreprocessing training data...")
-    x_train, removed_features, removed_points = de.fill_data(
+    x_train, removed_features, removed_points = de.fill_data_v2(
     x_train_raw,
     remove_features=[],
     remove_points=[],
     threshold=True,
     threshold_features=threshold_features,
     threshold_points=threshold_points,
-    normalize=normalize,
-    remove_outliers=remove_outliers)
+    normalize=False,
+    outlier_strategy=outlier_strategy)
 
     # Prints some info
     print(f"Removed {len(removed_features)} features with >{THRESHOLD_FEATURES*100}% missing data")
@@ -68,15 +72,15 @@ def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = Tr
 
     #Repeat operation for x_test
     print("\nPreprocessing test data...")
-    x_test, _, _ = de.fill_data(
+    x_test, _, _ = de.fill_data_v2(
     x_test_raw,
     remove_features=removed_features,
     remove_points=[], 
     threshold=False,   
     threshold_features=threshold_features,
     threshold_points=threshold_points,
-    normalize=normalize,
-    remove_outliers=remove_outliers) 
+    normalize=False,
+    outlier_strategy=outlier_strategy) 
     print(f"Processed test data shape: {x_test.shape}")
 
     if normalize:
@@ -118,6 +122,57 @@ def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = Tr
     #        print(f" Feature {idx}: {count} aberrant values")        
 
     return x_train,y_train,x_test,train_ids, test_ids
+
+def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart'):
+    """
+    Load raw training and test data, preprocess it, and return cleaned datasets
+    ready for ML models. Handles missing values, feature removal, outlier removal,
+    and normalization.
+
+    INPUTS:
+        - threshold_features (float): Max fraction of missing values allowed per feature.
+        - threshold_points (float): Max fraction of missing values allowed per data point (row).
+        - normalize (bool): If True, normalize continuous features.
+        - outlier_strategy (str): 'none', 'smart', or 'aggressive' outlier handling.
+
+    OUTPUTS:
+        - x_train (np.ndarray): Preprocessed training features.
+        - y_train (np.ndarray): Aligned labels for x_train.
+        - x_test (np.ndarray): Preprocessed test features aligned with x_train.
+        - train_ids (np.ndarray): Original training IDs.
+        - test_ids (np.ndarray): Original test IDs.
+    """
+    import os
+    import numpy as np
+
+    dir_path = os.path.dirname(os.path.realpath(__file__)) + '/data/dataset/'
+    
+    # Load raw data
+    print("Loading raw data...")
+    x_train_raw, x_test_raw, y_train_raw, train_ids, test_ids = hl.load_csv_data(dir_path)
+    print(f"Raw train shape: {x_train_raw.shape}, test shape: {x_test_raw.shape}, labels shape: {y_train_raw.shape}")
+    
+    # Add this at the start of prepare_data2
+    print(f"RAW data - Train min: {x_train_raw.min()}, max: {x_train_raw.max()}")
+    print(f"RAW data - Unique values sample: {np.unique(x_train_raw[:, 0])[:10]}")
+    print(f"RAW labels: {np.unique(y_train_raw)}")
+    # Apply robust preprocessing pipeline
+    print("\nApplying robust preprocessing pipeline...")
+    x_train, y_train, x_test = de.fill_data_robust3(
+        x_train_raw,
+        x_test_raw,
+        y_train_raw,
+        threshold_features=threshold_features,
+        threshold_points=threshold_points,
+        normalize=normalize,
+        outlier_strategy=outlier_strategy
+    )
+    
+    print(f"\nFinal training data shape: {x_train.shape}, test data shape: {x_test.shape}")
+    print(f"Final labels shape: {y_train.shape}")
+    print(f"Remaining NaNs in train: {np.isnan(x_train).sum()}, test: {np.isnan(x_test).sum()}")
+    
+    return x_train, y_train, x_test, train_ids, test_ids
 
 def accuracy(y_true,y_pred):
     return np.mean(y_true == y_pred)
@@ -184,39 +239,20 @@ def compute_f1_score_KNN(y_true, y_pred):
     return f1, tp, fp, fn
 
 
-def continuous_to_class(pred_cont,threshold =0.2):
-    return np.where(pred_cont >= threshold, 1, -1)
-
+def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
+            plt.figure(figsize=(7, 5))
+            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
+            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
+            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"{filename}")
+            print(f"Saved plot: {filename}")
+            plt.show()
 # Basic confusion counts (expects y_true and y_pred in {-1,1})
-def compute_f1_score_ridge(y_true, X, weights, threshold=0.0):
-    """
-    Compute F1 score for ridge regression treated as classification.
-
-    Inputs:
-      - y_true: np.ndarray of shape (n_samples,) with labels in {-1, 1}
-      - X: np.ndarray of shape (n_samples, n_features)
-      - weights: np.ndarray of shape (n_features,)
-      - threshold: float, default=0.0 — classification threshold on raw predictions
-
-    Returns:
-      - f1: float — F1 score
-    """
-    # Continuous predictions
-    y_pred_cont = X @ weights
-    # Convert to binary {-1, 1}
-    y_pred = np.where(y_pred_cont >= threshold, 1, -1)
-
-    # Compute F1 score
-    tp = np.sum((y_pred == 1) & (y_true == 1))
-    fp = np.sum((y_pred == 1) & (y_true == -1))
-    fn = np.sum((y_pred == -1) & (y_true == 1))
-
-    print(tp,fp,fn)
-
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-    return f1
 
 def train_mean_square_error_gd(
         y_train,
@@ -285,7 +321,7 @@ def train_mean_square_error_gd(
                 max_iters=max_iters,
                 gamma=gamma,
             )
-
+            threshold = np.mean(y_tr)
             # Predict validation set
             y_val_pred_cont = X_val @ w
             y_val_pred = np.where(y_val_pred_cont >= threshold, 1, -1)
@@ -296,6 +332,7 @@ def train_mean_square_error_gd(
             fold_losses.append(loss)
             fold_accs.append(acc)
             fold_f1s.append(f1)
+            print(f1)
 
         # Average across folds
         mean_losses.append(np.mean(fold_losses))
@@ -319,11 +356,18 @@ def train_mean_square_error_gd(
 
     # ---- Training and test predictions ----
     print("\nGenerating predictions with best gamma...")
+    n_1 = np.sum(y_train == 1)
+    n_0 = np.sum(y_train == -1)
+    threshold = n_1 / (n_0 + n_1)
     y_train_pred = x_train_bias @ final_w
     y_train_bin = np.where(y_train_pred >= threshold, 1, -1)
     train_acc = accuracy(y_train, y_train_bin)
     train_f1 = f1_score(y_train, y_train_bin)
     print(f"Final training accuracy: {train_acc:.3f}, F1: {train_f1:.4f}, loss: {final_loss:.3f}")
+    print(f"  Predicted class -1: {np.sum(y_train_bin == -1)} ({np.sum(y_train_bin == -1)/len(y_train_bin)*100:.1f}%)")
+    print(f"  Predicted class 1: {np.sum(y_train_bin == 1)} ({np.sum(y_train_bin == 1)/len(y_train_bin)*100:.1f}%)")
+    print(f"  Actual class -1: {np.sum(y_train == -1)} ({np.sum(y_train == -1)/len(y_train)*100:.1f}%)")
+    print(f"  Actual class 1: {np.sum(y_train == 1)} ({np.sum(y_train == 1)/len(y_train)*100:.1f}%)")
 
     # Test predictions
     y_test_pred = np.where(x_test_bias @ final_w >= threshold, 1, -1)
@@ -333,22 +377,8 @@ def train_mean_square_error_gd(
 
     # ---- Plot results ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_GD_F1_VS_gamma.png","MSE_GD",best_gamma)
-    plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_GD_acc_VS_gamma.png","MSE_GD",best_gamma)
+        plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_GD_F1_VS_gamma.png","MSE_GD",best_gamma)
+        plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_GD_acc_VS_gamma.png","MSE_GD",best_gamma)
     
 def train_mean_square_error_sgd(
         y_train,
@@ -381,7 +411,6 @@ def train_mean_square_error_sgd(
              - seed : int, optional : Random seed for reproducibility.
              - save_plots : Boolean, optional : Plot metrics w.r.t gamma hyperparameter and save.
     """
-    threshold = 0.0
     # Prepare data for logistic regression
     print("\nPreparing data for MSE SGD...")
     # Add bias term (column of ones) to features
@@ -389,7 +418,7 @@ def train_mean_square_error_sgd(
     x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
     print(f"Training data with bias: {x_train_bias.shape}")
     print(f"Test data with bias: {x_test_bias.shape}")
-
+    threshold = 0.2
     # Initialize weights 
     initial_w = np.zeros(x_train_bias.shape[1])
 
@@ -465,22 +494,8 @@ def train_mean_square_error_sgd(
 
     # ---- Plot results ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_SGD_F1_VS_gamma.png","MSE_SGD",best_gamma)
-    plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_SGD_acc_VS_gamma.png","MSE_SGD",best_gamma)
+        plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_SGD_F1_VS_gamma.png","MSE_SGD",best_gamma)
+        plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_SGD_acc_VS_gamma.png","MSE_SGD",best_gamma)
     
 def train_least_squares(
         y_train,
@@ -539,22 +554,8 @@ def train_least_squares(
     best_y_train_pred_binary = np.where(y_train_pred >= best_threshold, 1, -1)
     # --- Plot results ---
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(thresholds, f1s,"threshold", "F1", "blue", "least_squares_F1_VS_threshold.png","Least_squares",best_threshold)
-    plot_and_save(thresholds, accs,"threshold", "Accuracy", "orange", "least_squares_Accuracy_VS_threshold.png","Least_squares",best_threshold)
+        plot_and_save(thresholds, f1s,"threshold", "F1", "blue", "least_squares_F1_VS_threshold.png","Least_squares",best_threshold)
+        plot_and_save(thresholds, accs,"threshold", "Accuracy", "orange", "least_squares_Accuracy_VS_threshold.png","Least_squares",best_threshold)
     #plot_and_save(thresholds, mean_losses, "Loss", "green", "least_squares_Loss_VS_threshold.png","Least_squares")
 
 
@@ -615,7 +616,10 @@ def train_reg_logistic_regression(
              - seed : int, optional : Random seed for reproducibility.
              - save_plots : Boolean, optional : Plot metrics w.r.t gamma hyperparameter and save.
     """
+<<<<<<< HEAD
     #threshold = 0.05
+=======
+>>>>>>> 350be44b574d2686a3f125bed5f0f93c2038556e
     # Prepare data for logistic regression
     print("\nPreparing data for logistic regression...")
     # Convert labels from {-1, 1} to {0, 1} for logistic regression
@@ -632,6 +636,7 @@ def train_reg_logistic_regression(
     print(f"Training data with bias: {x_train_bias.shape}")
     print(f"Test data with bias: {x_test_bias.shape}")
 
+<<<<<<< HEAD
     if duplicate:
         # Augment data by duplicating samples with label 1 in the training set
         pos_indices = np.where(y_train_binary == 1)[0]
@@ -648,9 +653,12 @@ def train_reg_logistic_regression(
         x_train_bias = x_train_bias_final[shuffle_indices]
         y_train_binary = y_train_binary_final[shuffle_indices]
 
+=======
+    threshold = n_1 / (n_0 + n_1)
+>>>>>>> 350be44b574d2686a3f125bed5f0f93c2038556e
     # Initialize weights 
     initial_w = np.zeros(x_train_bias.shape[1])
-    initial_w[0] = np.log(n_1 / n_0)
+    initial_w[0] = np.log((n_1+1) / (n_0+1))
 
     # Compute k indices for k-folding
     k_indices = de.build_k_indices(y_train,k_fold,seed)
@@ -687,11 +695,8 @@ def train_reg_logistic_regression(
                     max_iters=max_iters,
                     gamma=gamma
                 )
-                x = X_val @ w
-                print(x[0:10])
                 f1 = compute_f1_score(y_val, X_val, w, threshold)
                 print(f1)
-                print(loss)
                 f1_scores.append(f1)
 
             mean_f1 = np.mean(f1_scores)
@@ -714,10 +719,19 @@ def train_reg_logistic_regression(
     # Training set predictions
     y_train_prob = impl._sigmoid(x_train_bias @ final_w)
     y_train_pred = (y_train_prob >= threshold).astype(int)
+<<<<<<< HEAD
     #print(f"final weight vector : {final_w} ")
     #print("Some values of y_train_prob ")
     x = x_train_bias @ final_w
     print(x[0:10])
+=======
+    print(f"final weight vector : {final_w} ")
+    print("Some values of y_train_prob ")
+    raw_scores = x_train_bias @ final_w
+    print(f"Raw scores: min={raw_scores.min():.3f}, max={raw_scores.max():.3f}, mean={raw_scores.mean():.3f}")      
+    print(f"Sigmoid outputs: min={y_train_prob.min():.6f}, max={y_train_prob.max():.6f}, mean={y_train_prob.mean():.6f}")
+    print(f"How many above threshold? {np.sum(y_train_prob >= threshold)}")
+>>>>>>> 350be44b574d2686a3f125bed5f0f93c2038556e
     print(f"F1 score : {compute_f1_score(y_train_binary,x_train_bias,final_w,threshold)}")
     
     print(f"\nTraining predictions:")
@@ -802,7 +816,6 @@ def train_logistic_regression(
              - k_fold : int, optional : Number of folds for cross-validation.
              - seed : int, optional : Random seed for reproducibility.
     """
-    threshold = 0.2
     # Prepare data for logistic regression
     print("\nPreparing data for logistic regression...")
     # Convert labels from {-1, 1} to {0, 1} for logistic regression
@@ -816,6 +829,9 @@ def train_logistic_regression(
     x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
     print(f"Training data with bias: {x_train_bias.shape}")
     print(f"Test data with bias: {x_test_bias.shape}")
+    n_0 = np.sum(y_train_binary == 0)
+    n_1 = np.sum(y_train_binary == 1)
+    threshold = n_1 / (n_0 + n_1)
 
     # Initialize weights 
     initial_w = np.zeros(x_train_bias.shape[1])
@@ -830,6 +846,7 @@ def train_logistic_regression(
     best_f1 = 0.0
     best_gamma = None
     for gamma in gammas:
+        print(f"Gamma : {gamma}")
         fold_f1s = []
         for k in range(k_fold):
             val_idx = k_indices[k]
@@ -874,21 +891,8 @@ def train_logistic_regression(
 
     # ---- Plot F1 vs gamma ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
 
-    plot_and_save(gammas, f1_per_gamma,"gamma", "F1", "blue", "Log_Reg_F1_VS_gamma.png","Log_Reg",best_gamma)
+        plot_and_save(gammas, f1_per_gamma,"gamma", "F1", "blue", "Log_Reg_F1_VS_gamma.png","Log_Reg",best_gamma)
 
 def train_ridge_regression(
         y_train,
@@ -974,20 +978,10 @@ def train_ridge_regression(
 
     # ---- Plot loss vs lambda ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
+        plot_and_save(lambdas, mean_f1s,"lambda", "F1", "blue", "Ridge_Reg_F1_VS_lambda.png","Ridge_Reg",best_lambda)
+        plot_and_save(lambdas,mean_losses,"lambda","Loss","orange","Ridge_Reg_Loss_VS_lambda.png","Ridge_Reg",best_lambda)
 
+<<<<<<< HEAD
     plot_and_save(lambdas, mean_f1s,"lambda", "F1", "blue", "Ridge_Reg_F1_VS_lambda.png","Ridge_Reg",best_lambda)
     plot_and_save(lambdas,mean_losses,"lambda","Loss","orange","Ridge_Reg_Loss_VS_lambda.png","Ridge_Reg",best_lambda)
 
@@ -1116,6 +1110,10 @@ def train_knn(
 
 """
 x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.1,threshold_points = 0.5, normalize = True, remove_outliers = False)
+=======
+#x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True)
+x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.8,threshold_points = 0.6, normalize = True,outlier_strategy='smart')
+>>>>>>> 350be44b574d2686a3f125bed5f0f93c2038556e
 # Add this before your cross-validation loop
 unique, counts = np.unique(y_train, return_counts=True)
 print(f"Class distribution: {dict(zip(unique, counts))}")
@@ -1124,10 +1122,11 @@ print(f"Class +1: {counts[1]} ({counts[1]/len(y_train)*100:.1f}%)")
 # Tested : 
 #train_least_squares(y_train,x_train,x_test,test_ids,save_plots=True) 
 
-#train_mean_square_error_gd(y_train,x_train,x_test,test_ids,save_plots=True)
+#train_mean_square_error_gd(y_train,x_train,x_test,test_ids,save_plots=True,max_iters=200,gammas=np.logspace(-3,-2,5))
 
 #train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,save_plots=True,gammas=2.1544346900318867e-05 * np.logspace(-2,2,num=9),max_iters=40000)
 
+<<<<<<< HEAD
 #train_reg_logistic_regression(y_train,x_train,x_test,test_ids,save_plots=True)
 """
 
@@ -1187,130 +1186,11 @@ plt.show()
 
 
 
+=======
+#train_logistic_regression(y_train,x_train,x_test,test_ids,save_plots=True,gammas=[0.01])
+
+train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=1000,lambdas=[0.01],gammas=[0.001])
+>>>>>>> 350be44b574d2686a3f125bed5f0f93c2038556e
 # Non-tested
 
 
-"""
-dir_path = os.path.dirname(os.path.realpath(__file__)) + '/data/dataset/'
-
-# Load Data
-print("Loading data...")
-x_train_raw, x_test_raw, y_train_raw, train_ids, test_ids = hl.load_csv_data(dir_path)
-# Print shape for debug
-print(f"Raw training data shape: {x_train_raw.shape}")
-print(f"Raw test data shape: {x_test_raw.shape}")
-print(f"Raw labels shape: {y_train_raw.shape}")
-
-# Preprocessing training data using de methods
-print("\nPreprocessing training data...")
-x_train, removed_features, removed_points = de.fill_data(
-    x_train_raw,
-    remove_features=[],
-    remove_points=[],
-    threshold=True,
-    threshold_features=THRESHOLD_FEATURES,
-    threshold_points=THRESHOLD_POINTS,
-    normalize=NORMALIZE,
-    remove_outliers=REMOVE_OUTLIERS
-)
-# Prints some info
-print(f"Removed {len(removed_features)} features with >{THRESHOLD_FEATURES*100}% missing data")
-print(f"Removed {len(removed_points)} data points with >{THRESHOLD_POINTS*100}% missing data")
-print(f"Processed training data shape: {x_train.shape}")
-# Remove corresponding labels for removed data points
-y_train = np.delete(y_train_raw, removed_points, axis=0)
-print(f"Processed labels shape: {y_train.shape}")
-
-
-# Same for test data
-print("\nPreprocessing test data...")
-x_test, _, _ = de.fill_data(
-    x_test_raw,
-    remove_features=removed_features,
-    remove_points=[], 
-    threshold=False,   
-    threshold_features=THRESHOLD_FEATURES,
-    threshold_points=THRESHOLD_POINTS,
-    normalize=NORMALIZE,
-    remove_outliers=False 
-)
-print(f"Processed test data shape: {x_test.shape}")
-
-
-
-
-
-# Prepare data for logreg
-print("\nPreparing data for logistic regression...")
-# Convert labels from {-1, 1} to {0, 1} for logistic regression
-y_train_binary = (y_train + 1) / 2  
-y_train_binary = y_train_binary.astype(int)
-print(f"Label distribution: {np.bincount(y_train_binary)}")
-print(f"Class 0: {np.sum(y_train_binary == 0)} samples")
-print(f"Class 1: {np.sum(y_train_binary == 1)} samples")
-# Add bias term (column of ones) to features
-x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
-x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
-print(f"Training data with bias: {x_train_bias.shape}")
-print(f"Test data with bias: {x_test_bias.shape}")
-
-
-# Training
-print("\nTraining logistic regression model...")
-# Initialize weights
-initial_w = np.zeros(x_train_bias.shape[1])
-# Train regularized logistic regression
-w, loss = impl.reg_logistic_regression(
-    y_train_binary,
-    x_train_bias,
-    lambda_=LAMBDA,
-    initial_w=initial_w,
-    max_iters=MAX_ITERS,
-    gamma=GAMMA
-)
-print(f"Training completed. Final loss: {loss:.6f}")
-
-
-# Predictions
-print("\nGenerating predictions...")
-# Predict probabilities
-z_test = x_test_bias @ w
-y_pred_prob = impl._sigmoid(z_test)
-# Convert probabilities to binary predictions
-y_pred_binary = (y_pred_prob >= 0.2).astype(int)
-# Convert back to {-1, 1} format for submission
-y_pred = 2 * y_pred_binary - 1
-print(f"Prediction distribution:")
-print(f"Class -1: {np.sum(y_pred == -1)} samples")
-print(f"Class 1: {np.sum(y_pred == 1)} samples")
-
-
-# Submission file
-print("\nCreating submission file...")
-output_path = "submission.csv"
-hl.create_csv_submission(test_ids, y_pred, output_path)
-print(f"Submission file at : {output_path}")
-
-
-# Calculate metrics
-print("\nComputing training metrics...")
-z_train = x_train_bias @ w
-y_train_pred_prob = impl._sigmoid(z_train)
-y_train_pred_binary = (y_train_pred_prob >= 0.2).astype(int)  # Same threshold as test
-
-# Accuracy
-train_accuracy = np.mean(y_train_pred_binary == y_train_binary)
-
-# F1 Score
-tp = np.sum((y_train_pred_binary == 1) & (y_train_binary == 1))
-fp = np.sum((y_train_pred_binary == 1) & (y_train_binary == 0))
-fn = np.sum((y_train_pred_binary == 0) & (y_train_binary == 1))
-
-precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-
-print(f"Training accuracy: {train_accuracy*100:.2f}%")
-print(f"Training F1 score: {f1:.3f}")
-print(f"Precision: {precision:.3f}, Recall: {recall:.3f}")
-"""
