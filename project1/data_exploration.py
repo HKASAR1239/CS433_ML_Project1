@@ -432,6 +432,27 @@ def build_k_indices(y: np.ndarray, k_fold: int, seed: int):
     k_indices = [indices[k * interval : (k+1) * interval] for k in range(k_fold)]
     return np.array(k_indices)
 
+def build_k_indices_knn(y: np.ndarray, k_fold: int, percent_data: float, seed: int):
+    """build k indices for training a kNN model with k-fold.
+    Args:
+        y:      shape=(N,)
+        x:      shape=(N,D)
+        k_fold: K in K-fold, i.e. the fold num
+        seed:   the random seed
+    Returns:
+        A 2D array of shape=(k_fold, N/k_fold) that indicates the data indices for each fold
+    """
+    # Select a percentage of the data for kNN training
+    n_row = y.shape[0]
+    n_selected = int(n_row * percent_data)
+    np.random.seed(seed)
+    selected_indices = np.random.permutation(n_row)[:n_selected]
+    interval = int(n_selected / k_fold)
+    indices = selected_indices
+    k_indices = [indices[k * interval : (k+1) * interval] for k in range(k_fold)]
+    return np.array(k_indices)
+
+
 def CrossValidation1Fold(y: np.ndarray, x: np.ndarray, k_fold: int, seed: int,model, **model_kwargs):
     """
     Perform a folding for cross validation with a specified model

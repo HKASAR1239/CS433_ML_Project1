@@ -20,7 +20,7 @@ LAMBDA = 0.001
 # best gamma / best lambda : 0.1 0.0001
 # Training F1 score: 0.413
 
-def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, remove_outliers = False):
+def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, remove_outliers = False, aberrant_threshold = 10.0):
     """
         Load the raw training and test data, preprocess it, and return cleaned datasets 
         ready for machine learning models. Handles missing values, feature removal, 
@@ -101,6 +101,22 @@ def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = Tr
             x_train[:, continuous_mask] = (x_train[:, continuous_mask] - train_mean) / train_std
             x_test[:, continuous_mask] = (x_test[:, continuous_mask] - train_mean) / train_std
 
+    # Set the aberrant values to zero after normalization (aberant values: more than 10 std from mean)
+    aberrant_values = []
+    for column in range(x_train.shape[1]):
+        col_mean = x_train[:, column].mean()
+        col_std = x_train[:, column].std()
+        aberrant_mask_train = np.abs(x_train[:, column] - col_mean) > aberrant_threshold * col_std
+        aberrant_mask_test = np.abs(x_test[:, column] - col_mean) > aberrant_threshold * col_std
+        x_train[aberrant_mask_train, column] = 0.0
+        x_test[aberrant_mask_test, column] = 0.0
+        aberrant_values.append(np.sum(aberrant_mask_train))
+            
+    #print("\nAberrant values per feature (set to 0):")
+    #for idx, count in enumerate(aberrant_values):
+    #    if count > 0:
+    #        print(f" Feature {idx}: {count} aberrant values")        
+
     return x_train,y_train,x_test,train_ids, test_ids
 
 def accuracy(y_true,y_pred):
@@ -144,7 +160,29 @@ def compute_f1_score(y_train_binary,x_train_bias,weights,threshold = 0.2):
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    return f1
+    return f1, tp, fp, fn
+
+def compute_f1_score_KNN(y_true, y_pred):
+    """
+    Compute F1 score for KNN predictions.
+
+    Inputs:
+      - y_true: np.ndarray of shape (n_samples,) with labels in {-1, 1}
+      - y_pred: np.ndarray of shape (n_samples,) with predicted labels in {-1, 1}
+
+    Returns:
+      - f1: float — F1 score
+    """
+    # Compute F1 score
+    tp = np.sum((y_pred == 1) & (y_true == 1))
+    fp = np.sum((y_pred == 1) & (y_true == -1))
+    fn = np.sum((y_pred == -1) & (y_true == 1))
+
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+    return f1, tp, fp, fn
+
 
 def continuous_to_class(pred_cont,threshold =0.2):
     return np.where(pred_cont >= threshold, 1, -1)
@@ -549,7 +587,9 @@ def train_reg_logistic_regression(
         test_ids,
         gammas = np.logspace(-5,-2,5),
         lambdas = np.logspace(-4, -2, 4),
-        max_iters=2000,                                  
+        threshold = 0.2,
+        max_iters=2000,   
+        duplicate = False,                               
         k_fold=4,
         seed=42,
         save_plots=False):
@@ -575,7 +615,7 @@ def train_reg_logistic_regression(
              - seed : int, optional : Random seed for reproducibility.
              - save_plots : Boolean, optional : Plot metrics w.r.t gamma hyperparameter and save.
     """
-    threshold = 0.05
+    #threshold = 0.05
     # Prepare data for logistic regression
     print("\nPreparing data for logistic regression...")
     # Convert labels from {-1, 1} to {0, 1} for logistic regression
@@ -591,6 +631,22 @@ def train_reg_logistic_regression(
     x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
     print(f"Training data with bias: {x_train_bias.shape}")
     print(f"Test data with bias: {x_test_bias.shape}")
+
+    if duplicate:
+        # Augment data by duplicating samples with label 1 in the training set
+        pos_indices = np.where(y_train_binary == 1)[0]
+        x_train_pos = x_train_bias[pos_indices]
+        y_train_pos = y_train_binary[pos_indices]
+        print("shape of positive samples :", np.shape(x_train_pos))
+        print("shape of y positive samples :", np.shape(y_train_pos))
+
+        # Duplicate positive samples in the final training set
+        x_train_bias_final = np.vstack((x_train_bias, x_train_pos))
+        y_train_binary_final = np.hstack((y_train_binary, y_train_pos))
+        # Shuffle the augmented dataset
+        shuffle_indices = np.random.permutation(len(y_train_binary_final))
+        x_train_bias = x_train_bias_final[shuffle_indices]
+        y_train_binary = y_train_binary_final[shuffle_indices]
 
     # Initialize weights 
     initial_w = np.zeros(x_train_bias.shape[1])
@@ -613,6 +669,15 @@ def train_reg_logistic_regression(
                 train_idx = np.delete(np.arange(y_train_binary.shape[0]), val_idx)
                 X_tr, X_val = x_train_bias[train_idx], x_train_bias[val_idx]
                 y_tr, y_val = y_train_binary[train_idx], y_train_binary[val_idx]
+
+                if duplicate:
+                    # Augment data by duplicating samples with label 1 in the training set
+                    pos_indices = np.where(y_tr == 1)[0]
+                    X_tr_pos = X_tr[pos_indices]
+                    y_tr_pos = y_tr[pos_indices]
+                    X_tr = np.vstack((X_tr, X_tr_pos))
+                    y_tr = np.hstack((y_tr, y_tr_pos))
+
 
                 # Train
                 w,loss = impl.reg_logistic_regression(
@@ -649,8 +714,8 @@ def train_reg_logistic_regression(
     # Training set predictions
     y_train_prob = impl._sigmoid(x_train_bias @ final_w)
     y_train_pred = (y_train_prob >= threshold).astype(int)
-    print(f"final weight vector : {final_w} ")
-    print("Some values of y_train_prob ")
+    #print(f"final weight vector : {final_w} ")
+    #print("Some values of y_train_prob ")
     x = x_train_bias @ final_w
     print(x[0:10])
     print(f"F1 score : {compute_f1_score(y_train_binary,x_train_bias,final_w,threshold)}")
@@ -667,7 +732,9 @@ def train_reg_logistic_regression(
     y_test = 2 * y_test_binary - 1
 
 
-    hl.create_csv_submission(test_ids, y_test, "submission.csv")
+    path = os.path.dirname(os.path.realpath(__file__))
+    output_path = path + "/submission_v7.csv"
+    hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
     # ---- Plot F1 scores only ----
     if save_plots:
@@ -686,8 +753,23 @@ def train_reg_logistic_regression(
         plt.title("Regularized Logistic Regression: F1 vs Gamma")
         plt.grid(True)
         plt.tight_layout()
-        plt.savefig(f"plots/reg_logistic_F1_VS_gamma.png")
+        plt.savefig(path + '/f1.png')        
         print("Saved plot: reg_logistic_F1_VS_gamma.png")
+        plt.close()
+
+        # Plot the prediction distribution on training and test sets with transparent histograms
+        plt.figure()
+        plt.hist(y_train_prob, bins=30, alpha=0.5, label='Train Predictions', color='blue', density=True)
+        plt.hist(y_test_prob, bins=30, alpha=0.5, label='Test Predictions', color='orange', density=True)
+        plt.axvline(threshold, color='r', linestyle='--', label='Threshold')
+        plt.xlabel("Predicted Probability")
+        plt.ylabel("Density")
+        plt.title("Prediction Distribution on Train and Test Sets")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(path + '/Pred_distr.png')        
+        print("Saved plot: reg_logistic_prediction_distribution.png")
         plt.close()
 
 def train_logistic_regression(
@@ -909,7 +991,131 @@ def train_ridge_regression(
     plot_and_save(lambdas, mean_f1s,"lambda", "F1", "blue", "Ridge_Reg_F1_VS_lambda.png","Ridge_Reg",best_lambda)
     plot_and_save(lambdas,mean_losses,"lambda","Loss","orange","Ridge_Reg_Loss_VS_lambda.png","Ridge_Reg",best_lambda)
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = False, remove_outliers = True)
+
+
+
+
+
+
+    # Final prediction by majority vote
+    y_pred = np.where(y_pred >= 0, 1, -1)
+    return y_pred
+
+
+# Code a KNN classifier using only numpy (no other libraries)
+def knn_predict(x_train, y_train, x_test, k=3, factor=1):
+    """
+    K-Nearest Neighbors classifier.
+
+    Input  : - x_train : np.ndarray : Training features, shape (N, D).
+             - y_train : np.ndarray : Training labels, shape (N,)
+             - x_test : np.ndarray : Test features, shape (M, D).
+             - k : int, optional : Number of neighbors to consider.
+    Output : - y_pred : np.ndarray : Predicted labels for test set, shape (M,)."""
+    
+    print("\nPreparing data for KNN...")
+
+
+    # Code the KNN algorithm
+    y_pred = []
+    print("Number of test samples :", x_test.shape[0])
+    for i in range(x_test.shape[0]):
+        # Compute distances from test point to all training points
+        distances = np.linalg.norm(x_train - x_test[i], axis=1)
+        # Get indices of k nearest neighbors
+        knn_indices = np.argsort(distances)[:k]
+        # Get the labels of the k nearest neighbors
+        knn_labels = y_train[knn_indices]
+        # Select class, positive count counts more (x2)
+        count_pos = factor*np.sum(knn_labels == 1)
+        count_neg = np.sum(knn_labels == -1)
+        label = np.sign(count_pos - count_neg)
+        y_pred.append(label)
+    return np.array(y_pred)
+
+def train_knn(
+        y_train,
+        x_train,
+        x_test,
+        test_ids,
+        ks = [3,5,10,15,20,30,40],
+        factors = [1,2,5,7,10],
+        k_fold = 4,
+        seed = 42, 
+        create_submission_file = False):
+    """
+    Train a KNN model with hyperparameter tuning
+    using k-fold cross-validation, then generate predictions for the test set.
+
+    This function:
+      1. Performs cross-validation over a grid of (k, factor)
+      2. Selects the combination yielding the best mean F1 score
+      3. Retrains the final model on the full training set with best parameters
+      4. Generates and saves predictions for the test set
+
+    Input:
+        - y_train : np.ndarray : Training labels, shape (N,) with values in {-1, 1}.
+        - x_train : np.ndarray : Training features, shape (N, D).
+        - x_test : np.ndarray : Test features, shape (M, D) (no labels).
+        - test_ids : np.ndarray : Indices of the the test features.
+        - ks : list of int, optional : Number of neighbors to test during cross-validation.
+        - factors : list of int, optional : Weighting factors for positive class during cross-validation.
+        - k_fold : int, optional : Number of folds for cross-validation.
+        - seed : int, optional : Random seed for reproducibility.
+        - save_plots : Boolean, optional : Plot metrics w.r.t hyperparameters and save.
+
+    Output  : - y_pred : np.ndarray : Predicted labels for test set, shape (M,).
+    """
+    # CV over k and factor
+    best_f1 = 0.0
+    best_k, best_factor = None, None
+    plot_f1_scores = []
+    parameters = []
+    for k in ks:
+        for factor in factors:
+            parameters.append((k, factor))
+            print(f"=== K = {k}, factor = {factor} === ")
+            f1_scores = []
+            # Compute k indices for k-folding
+            k_indices = de.build_k_indices_knn(y_train,k_fold, 0.002, seed)
+            for fold in range(k_fold):
+                val_idx = k_indices[fold]
+                train_idx = np.delete(np.arange(y_train.shape[0]), val_idx)
+                X_tr, X_val = x_train[train_idx], x_train[val_idx]
+                y_tr, y_val = y_train[train_idx], y_train[val_idx]
+
+                # Predict using KNN
+                y_val_pred = knn_predict(X_tr, y_tr, X_val, k=k, factor=factor)
+
+                f1 = f1_score(y_val, y_val_pred)
+                f1_scores.append(f1)
+
+            mean_f1 = np.mean(f1_scores)
+            print(f"Mean F1 score: {mean_f1:.4f}")
+
+            plot_f1_scores.append(mean_f1)
+
+            if mean_f1 > best_f1:
+                best_f1 = mean_f1
+                best_k, best_factor = k, factor
+    print(f"Best k/factor: {best_k}/{best_factor}, F1: {best_f1:.4f}")
+
+    if create_submission_file:
+        # Retrain on full data with best params
+        y_test_pred = knn_predict(x_train, y_train, x_test, best_k, best_factor)
+
+        # Create and save submission file
+        output_path = os.path.dirname(os.path.realpath(__file__))
+        output_path += "/submission_knn_1.csv"
+        hl.create_csv_submission(test_ids, y_test_pred, output_path)
+        print("Submission file saved at:", output_path)
+
+    return plot_f1_scores, parameters
+
+
+
+"""
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.1,threshold_points = 0.5, normalize = True, remove_outliers = False)
 # Add this before your cross-validation loop
 unique, counts = np.unique(y_train, return_counts=True)
 print(f"Class distribution: {dict(zip(unique, counts))}")
@@ -923,8 +1129,64 @@ print(f"Class +1: {counts[1]} ({counts[1]/len(y_train)*100:.1f}%)")
 #train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,save_plots=True,gammas=2.1544346900318867e-05 * np.logspace(-2,2,num=9),max_iters=40000)
 
 #train_reg_logistic_regression(y_train,x_train,x_test,test_ids,save_plots=True)
+"""
 
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[0.01],gammas=[0.0001])
+# Find best threshold with these paramters : show F1 score and percent of class 0/1 predicted (real: 84/16)
+#x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=10)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4) #F1 : 0.422
+
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=5)
+train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4, save_plots=True) # F1: 0.424
+
+#x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=1000)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4) #F1 : 0.413
+
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=True, threshold=0.2) # F1: 0.523 (75/25)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.3) # F1: 0.518 (80/20)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=True, threshold=0.3) # F1: 0.498 (84/16)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=True, threshold=0.4) # F1: 0.469 (87/13)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=True, threshold=0.5) # F1: 0.377 (93/7)
+
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-4, 1e-2],gammas=[0.1, 0.01,0.001], duplicate=False, threshold=0.1)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-4, 1e-2],gammas=[0.1, 0.01,0.001], duplicate=False, threshold=0.05)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-4, 1e-2],gammas=[0.1, 0.01,0.001], duplicate=False, threshold=0.1)
+
+
+
+"""
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.1 ,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=10)
+
+f1_scores, parameters = train_knn(y_train,x_train,x_test,test_ids,ks=[20, 30, 40],factors=[1, 5, 9, 13],k_fold=2)
+
+# Plotting F1 scores vs parameters
+import matplotlib.pyplot as plt
+
+path=os.path.dirname(os.path.realpath(__file__)) + '/plots/'
+
+plt.figure(figsize=(10, 6))
+f1_scores = np.array(f1_scores)
+ks = [param[0] for param in parameters]
+factors = [param[1] for param in parameters]
+scatter = plt.scatter(ks, factors, c=f1_scores, cmap='viridis', s=100)
+plt.colorbar(scatter, label='F1 Score')
+plt.xlabel('Number of Neighbors (k)')
+plt.ylabel('Weighting Factor for Positive Class')
+plt.title('KNN Hyperparameter Tuning: F1 Score vs k and Factor')
+plt.grid(True)
+plt.savefig(path + 'KNN_F1_Scores.png')
+plt.show()
+
+"""
+
+# Normalized, aberrant removed (10), threshold features 0.2, points 0.5, test k[20,30,40], factors [3,5,7] -> Best k/factor: 30/7, F1: 0.4167
+# Normalized, aberrant removed (10), threshold features 0.2, points 0.5, test k[10,20,30,40], factors [1, 3,5,7, 9], CV = 4 -> Best k/factor: 30/9, F1: 0.3436
+# Normalized, aberrant removed (10), threshold features 0.2, points 0.5, test k[30], factors [5,7,9,11], CV = 4 -> Best k/factor: 30/9, F1: 0.3474
+# Normalized, aberrant removed (10), threshold features 0.1, points 0.5, test k[30], factors [9], CV = 4 -> Best k/factor: 30/9, F1: 0.3436
+
+
+
+
+
 # Non-tested
 
 
