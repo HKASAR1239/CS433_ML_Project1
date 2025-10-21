@@ -205,7 +205,7 @@ def IQR(data, factor=1.5):
     data = data.copy()
     
     # Step 1: Replace obvious missing data placeholders FIRST
-    placeholder_values = [-999, -999999, 999999, -9999, 99999]
+    placeholder_values = [ -999999, 999999, 99999]
     for placeholder in placeholder_values:
         data[data == placeholder] = np.nan
     
@@ -360,7 +360,8 @@ def fill_data(data, remove_features = [], remove_points = [], threshold = True, 
         
         # Step 5: Normalize after filling
         if normalize:
-            data[:, i] = normalize_feature(data[:, i])
+            #data[:, i] = normalize_feature(data[:, i])
+            continue
     
     # Final safety check
     assert not np.any(np.isnan(data)), "Data still contains NaN after fill_data!"
@@ -406,7 +407,7 @@ def identify_categorical_features(data, max_unique_ratio=0.05):
         
         if (is_integer and is_few_unique) or is_very_few:
             categorical_mask[i] = True
-            print(f"  Feature {i}: Categorical ({n_unique} unique values)")
+            #print(f"  Feature {i}: Categorical ({n_unique} unique values)")
     
     return categorical_mask
 
@@ -432,37 +433,607 @@ def build_k_indices(y: np.ndarray, k_fold: int, seed: int):
     k_indices = [indices[k * interval : (k+1) * interval] for k in range(k_fold)]
     return np.array(k_indices)
 
-def CrossValidation1Fold(y: np.ndarray, x: np.ndarray, k_fold: int, seed: int,model, **model_kwargs):
+if __name__ == "__main__":
+    
+    x_train = load_data('x_train.csv')
+    x_test = load_data('x_test.csv')
+    y_train = load_data('y_train.csv')
+
+    filled_x_train, removed_features, removed_points = fill_data(x_train, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True)
+    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_train_f09-p06-n.csv', filled_x_train, delimiter=',')
+
+    # remove the same features and points from x_test as were removed from x_train
+    filled_x_test, _, _ = fill_data(x_test, remove_features = removed_features, remove_points = removed_points, threshold = False, normalize=True)
+    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_test_f09-p06-n.csv', filled_x_test, delimiter=',')
+
+    # remove the same points from y_train as were removed from x_train
+    y_train, _ = remove_missing_data_points(y_train, threshold=0.6)
+    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_y_train_f09-p06-n.csv', y_train, delimiter=',')
+
+    # Print the shape of the processed data to verify that the number of features and points match
+    print(filled_x_train.shape)
+    print(filled_x_test.shape)
+    print(y_train.shape)
+
+def clean_placeholders_only(data):
     """
-    Perform a folding for cross validation with a specified model
+    Remplace UNIQUEMENT les valeurs placeholder qui sont clairement des erreurs.
+    Ne touche PAS aux vraies valeurs extrêmes qui peuvent être informatives.
+    
+    Input: numpy array of shape (n_samples, n_features)
+    Output: numpy array with placeholders replaced by NaN
     """
-    k_indices = build_k_indices[y,x,k_fold,seed]
-    xTest = x[k_indices]
-    yTest = y[k_indices]
-    trainIdx = k_indices[np.arange(len(k_indices)) != k].ravel()
-    xTrain,yTrain = x[trainIdx], y[trainIdx]
+    data = data.copy()
+    
+    print("\n=== CLEANING PLACEHOLDERS ===")
+    initial_valid = np.sum(~np.isnan(data))
+    
+    # Step 1: Valeurs placeholder évidentes
+    placeholder_values = [-999, -999999, 999999, -9999, 99999, 9999]
+    for placeholder in placeholder_values:
+        mask = np.isclose(data, placeholder, atol=1e-6)
+        count = np.sum(mask)
+        if count > 0:
+            print(f"  Replacing {count} occurrences of {placeholder}")
+            data[mask] = np.nan
+    
+    # Step 2: Valeurs physiquement impossibles (très très extrêmes)
+    # Seulement si VRAIMENT absurde (>1 million, etc.)
+    extreme_mask = np.abs(data) > 1e6
+    extreme_count = np.sum(extreme_mask)
+    if extreme_count > 0:
+        print(f"  Replacing {extreme_count} extreme values (>1e6)")
+        data[extreme_mask] = np.nan
+    
+    final_valid = np.sum(~np.isnan(data))
+    print(f"  Total replaced: {initial_valid - final_valid} values")
+    print(f"  Remaining NaN: {np.sum(np.isnan(data))} ({np.sum(np.isnan(data))/data.size*100:.2f}%)")
+    
+    return data
 
-    w,mse = model(yTrain,xTrain,**model_kwargs)
 
-    yPred = xTest @ w
-    errorTest = im._mse_loss(yTest,xTest,w)
-    errorTrain = im._mse_loss(yTrain,xTrain,w)
-
-    return errorTest,errorTrain
-
-def CrossValidation(y: np.ndarray, x: np.ndarray, k_fold: int, seed: int,model, **model_kwargs):
+def smart_outlier_removal(data, factor=3.0, per_feature_threshold=0.01):
     """
-    Perform a cross validation with a specified model
+    Suppression d'outliers intelligente pour données médicales.
+    
+    Stratégie:
+    1. Remplace les placeholders uniquement
+    2. IQR très permissif (factor=3.0 au lieu de 1.5)
+    3. Limite à 1% d'outliers max par feature
+    4. Ne marque que les valeurs VRAIMENT extrêmes
+    
+    Input:
+        data: numpy array (n_samples, n_features)
+        factor: multiplicateur IQR (3.0 = très permissif)
+        per_feature_threshold: max % d'outliers à marquer par feature
+    
+    Output:
+        data: numpy array with outliers replaced by NaN
     """
-    errorsTest = []
-    errorsTrain = []
-    for k in range(k_fold):
-        errorTest,errorTrain = CrossValidation1Fold(y,x,k_fold,seed,model,**model_kwargs)
-        errorsTest.append(errorTest)
-        errorsTrain.append(errorTrain)
+    data = data.copy()
+    
+    print("\n=== SMART OUTLIER REMOVAL ===")
+    print(f"IQR factor: {factor} (permissive)")
+    print(f"Max outliers per feature: {per_feature_threshold*100}%")
+    
+    # Step 1: Clean placeholders first
+    data = clean_placeholders_only(data)
+    
+    initial_nans = np.isnan(data).sum()
+    
+    # Step 2: IQR permissif par feature
+    total_outliers_marked = 0
+    
+    for i in range(data.shape[1]):
+        column = data[:, i].copy()
+        valid_mask = ~np.isnan(column)
+        
+        if np.sum(valid_mask) < 10:  # Skip features avec trop peu de données
+            continue
+        
+        valid_data = column[valid_mask]
+        
+        # Calcul IQR
+        Q1 = np.percentile(valid_data, 25)
+        Q3 = np.percentile(valid_data, 75)
+        IQR_val = Q3 - Q1
+        
+        if IQR_val == 0:  # Feature constante
+            continue
+        
+        # Bornes TRES permissives
+        lower_bound = Q1 - factor * IQR_val
+        upper_bound = Q3 + factor * IQR_val
+        
+        # Identifie les outliers potentiels
+        outlier_mask = ((column < lower_bound) | (column > upper_bound)) & valid_mask
+        n_outliers = np.sum(outlier_mask)
+        
+        # Limite: ne marque que si <1% de la feature
+        max_outliers = int(per_feature_threshold * np.sum(valid_mask))
+        
+        if n_outliers > 0 and n_outliers <= max_outliers:
+            data[outlier_mask, i] = np.nan
+            total_outliers_marked += n_outliers
+        elif n_outliers > max_outliers:
+            # Si trop d'outliers détectés, c'est probablement une distribution asymétrique
+            # → Ne rien faire pour cette feature
+            pass
+    
+    final_nans = np.isnan(data).sum()
+    print(f"  Statistical outliers marked: {final_nans - initial_nans} values")
+    print(f"  Total NaN: {final_nans} ({final_nans/data.size*100:.2f}%)")
+    
+    return data
 
-    return errorsTest,errorsTrain
 
+def no_outlier_removal(data):
+    """
+    Supprime UNIQUEMENT les placeholders, garde toutes les vraies valeurs.
+    C'est souvent la meilleure approche pour les données médicales!
+    
+    Input: numpy array (n_samples, n_features)
+    Output: numpy array with only placeholders replaced
+    """
+    return clean_placeholders_only(data)
+
+
+# ============ MISE À JOUR DE fill_data ============
+
+def fill_data_v2(data, 
+                 remove_features=[], 
+                 remove_points=[], 
+                 threshold=True, 
+                 threshold_features=0.9, 
+                 threshold_points=0.6, 
+                 normalize=False,
+                 outlier_strategy='none'):  # ← NOUVEAU PARAMÈTRE
+    """
+    Version améliorée de fill_data avec stratégie d'outliers configurable.
+    
+    outlier_strategy options:
+        - 'none': Supprime uniquement les placeholders (RECOMMANDÉ pour données médicales)
+        - 'smart': IQR permissif (factor=3.0)
+        - 'aggressive': IQR strict (factor=1.5) - votre ancienne méthode
+    """
+    
+    # Remove specified features and points
+    data = np.delete(data, remove_features, axis=1)
+    data = np.delete(data, remove_points, axis=0)
+    
+    # Gestion des outliers selon stratégie
+    if outlier_strategy == 'none':
+        print("\n Outlier strategy: PLACEHOLDERS ONLY (recommended)")
+        data = no_outlier_removal(data)
+    elif outlier_strategy == 'smart':
+        print("\n Outlier strategy: SMART (permissive IQR)")
+        data = smart_outlier_removal(data, factor=3.0)
+    elif outlier_strategy == 'aggressive':
+        print("\n Outlier strategy: AGGRESSIVE (strict IQR)")
+        data = smart_outlier_removal(data, factor=1.5)
+    else:
+        print("\n  Unknown outlier strategy, using 'none'")
+        data = no_outlier_removal(data)
+    
+    # Le reste du code reste identique...
+    if threshold:
+        data, removed_features = remove_missing_features(data, threshold=threshold_features)
+        data, removed_points = remove_missing_data_points(data, threshold=threshold_points)
+    else:
+        removed_features = []
+        removed_points = []
+    
+    # Fill missing values
+    print("\nFilling missing values...")
+    for i in range(data.shape[1]):
+        column = data[:, i].copy()
+        
+        if np.all(np.isnan(column)):
+            data[:, i] = 0
+            continue
+        
+        if not np.any(np.isnan(column)):
+            if normalize:
+                data[:, i] = normalize_feature(column)
+            continue
+        
+        unique_values = np.unique(column[~np.isnan(column)])
+        
+        if len(unique_values) == 1:
+            column[np.isnan(column)] = unique_values[0]
+        else:
+            column = fill_column_mode(column)
+        
+        # Safety check
+        if np.any(np.isnan(column)):
+            median_val = np.nanmedian(column)
+            column = np.nan_to_num(column, nan=median_val if not np.isnan(median_val) else 0)
+        
+        if normalize:
+            column = normalize_feature(column)
+        
+        data[:, i] = column
+    
+    assert not np.any(np.isnan(data)), "Data still contains NaN!"
+    
+    return data, removed_features, removed_points
+
+def fill_data_robust2(x_train_raw, x_test_raw, y_train_raw,
+                     threshold_features=0.8, threshold_points=0.6,
+                     normalize=True, outlier_strategy='none'):
+    """
+    Robust preprocessing pipeline for training and test data.
+    Steps:
+    1. Remove extremely sparse features and rows
+    2. Handle outliers (placeholders, smart, or aggressive)
+    3. Fill remaining NaNs with medians
+    4. Properly handle categorical vs continuous features
+    5. Align train/test features
+    
+    Returns:
+        x_train, y_train, x_test
+    """
+    import numpy as np
+    
+    x_train = x_train_raw.copy()
+    x_test = x_test_raw.copy()
+    y_train = y_train_raw.copy()
+    
+    # Remove placeholders / outliers
+    if outlier_strategy == 'none':
+        x_train = no_outlier_removal(x_train)
+        x_test = no_outlier_removal(x_test)
+    elif outlier_strategy == 'smart':
+        x_train = smart_outlier_removal(x_train, factor=3.0)
+        x_test = smart_outlier_removal(x_test, factor=3.0)
+    elif outlier_strategy == 'aggressive':
+        x_train = smart_outlier_removal(x_train, factor=1.5)
+        x_test = smart_outlier_removal(x_test, factor=1.5)
+    
+    # Remove sparse features (columns)
+    feature_mask = np.isnan(x_train).mean(axis=0) < threshold_features
+    x_train = x_train[:, feature_mask]
+    x_test = x_test[:, feature_mask]
+    
+    #  Remove sparse rows (training only)
+    row_mask = np.isnan(x_train).mean(axis=1) < threshold_points
+    x_train = x_train[row_mask]
+    y_train = y_train[row_mask]
+    
+    #  Fill remaining NaNs with median
+    for i in range(x_train.shape[1]):
+        median_val = np.nanmedian(x_train[:, i])
+        x_train[:, i] = np.nan_to_num(x_train[:, i], nan=median_val)
+        x_test[:, i] = np.nan_to_num(x_test[:, i], nan=median_val)
+    
+    #  Identify categorical vs continuous features
+    print(f"\n=== IDENTIFYING FEATURE TYPES ===")
+    n_features = x_train.shape[1]
+    is_categorical = np.zeros(n_features, dtype=bool)
+    
+    for i in range(n_features):
+        n_unique = len(np.unique(x_train[:, i]))
+        # Consider categorical if: <= 10 unique values OR all integers with reasonable range
+        is_int = np.allclose(x_train[:, i], x_train[:, i].astype(int))
+        if n_unique <= 10 or (is_int and n_unique <= 50):
+            is_categorical[i] = True
+    
+    continuous_mask = ~is_categorical
+    print(f"Categorical features: {is_categorical.sum()}")
+    print(f"Continuous features: {continuous_mask.sum()}")
+    
+    #  Process categorical features - Simple label encoding (0, 1, 2, ...)
+    print(f"\n=== ENCODING CATEGORICAL FEATURES ===")
+    for i in range(n_features):
+        if is_categorical[i]:
+            # Get unique values from training set
+            unique_vals = np.unique(x_train[:, i])
+            # Create mapping: original_value -> encoded_value (0, 1, 2, ...)
+            value_map = {val: idx for idx, val in enumerate(unique_vals)}
+            
+            # Apply encoding to train
+            x_train[:, i] = np.array([value_map.get(val, 0) for val in x_train[:, i]])
+            
+            # Apply encoding to test (unseen values map to 0)
+            x_test[:, i] = np.array([value_map.get(val, 0) for val in x_test[:, i]])
+    
+    print(f"Encoded {is_categorical.sum()} categorical features to range [0, n_categories-1]")
+    
+    #  Normalize ONLY continuous features
+    if normalize and continuous_mask.sum() > 0:
+        print(f"\n=== NORMALIZING CONTINUOUS FEATURES ===")
+        
+        # Use robust statistics for continuous features only
+        median = np.median(x_train[:, continuous_mask], axis=0)
+        q75 = np.percentile(x_train[:, continuous_mask], 75, axis=0)
+        q25 = np.percentile(x_train[:, continuous_mask], 25, axis=0)
+        iqr = q75 - q25
+        
+        # Handle zero IQR
+        zero_iqr_mask = iqr == 0
+        if zero_iqr_mask.any():
+            print(f"  WARNING: {zero_iqr_mask.sum()} continuous features have IQR=0")
+            iqr[zero_iqr_mask] = 1.0
+        
+        # Apply robust standardization to continuous features only
+        x_train[:, continuous_mask] = (x_train[:, continuous_mask] - median) / iqr
+        x_test[:, continuous_mask] = (x_test[:, continuous_mask] - median) / iqr
+        
+        # Clip extreme values in continuous features
+        x_train[:, continuous_mask] = np.clip(x_train[:, continuous_mask], -10, 10)
+        x_test[:, continuous_mask] = np.clip(x_test[:, continuous_mask], -10, 10)
+        
+        print(f"  Normalized {continuous_mask.sum()} continuous features")
+        print(f"  Continuous features - min: {x_train[:, continuous_mask].min():.3f}, "
+              f"max: {x_train[:, continuous_mask].max():.3f}")
+    
+    #  Check categorical feature ranges
+    if is_categorical.sum() > 0:
+        cat_max = x_train[:, is_categorical].max()
+        cat_min = x_train[:, is_categorical].min()
+        print(f"\n=== CATEGORICAL FEATURE RANGES ===")
+        print(f"  Min: {cat_min:.0f}, Max: {cat_max:.0f}")
+        
+        # If categorical values are still too large, normalize them too
+        if cat_max > 100:
+            print(f"  ⚠️ WARNING: Categorical values up to {cat_max:.0f} detected!")
+            print(f"  Applying min-max scaling to categorical features for numerical stability...")
+            
+            for i in range(n_features):
+                if is_categorical[i]:
+                    min_val = x_train[:, i].min()
+                    max_val = x_train[:, i].max()
+                    if max_val > min_val:
+                        # Scale to [0, 1]
+                        x_train[:, i] = (x_train[:, i] - min_val) / (max_val - min_val)
+                        x_test[:, i] = (x_test[:, i] - min_val) / (max_val - min_val)
+                        # Optionally scale to [0, 10] for better weight learning
+                        x_train[:, i] *= 10
+                        x_test[:, i] *= 10
+            
+            print(f"  Categorical features scaled to [0, 10]")
+    
+    #  Remove zero-variance features
+    feature_vars = np.var(x_train, axis=0)
+    valid_features = feature_vars > 1e-10
+    n_removed = np.sum(~valid_features)
+    
+    if n_removed > 0:
+        print(f"\n=== REMOVING {n_removed} ZERO-VARIANCE FEATURES ===")
+        x_train = x_train[:, valid_features]
+        x_test = x_test[:, valid_features]
+    
+    # Final diagnostics
+    print(f"\n=== FINAL DATA SUMMARY ===")
+    print(f"Training shape: {x_train.shape}, Test shape: {x_test.shape}")
+    print(f"Overall - min: {x_train.min():.3f}, max: {x_train.max():.3f}, mean: {x_train.mean():.3f}")
+    print(f"Max absolute value: {np.abs(x_train).max():.3f}")
+    print(f"NaNs in train: {np.isnan(x_train).sum()}, test: {np.isnan(x_test).sum()}")
+    
+    if np.abs(x_train).max() > 100:
+        print(f"  ⚠️ WARNING: Large values still present! Max = {np.abs(x_train).max():.1f}")
+    
+    return x_train, y_train, x_test
+
+def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
+                       threshold_features=0.8, threshold_points=0.6,
+                       normalize=True, outlier_strategy='none'):
+    """
+    Robust preprocessing pipeline for training and test data.
+
+    Steps:
+    1. Remove extremely sparse features and rows
+    2. Handle outliers (placeholders, smart, or aggressive)
+    3. Fill remaining NaNs with medians
+    4. Properly handle categorical vs continuous features
+    5. Encode categorical features safely
+    6. Normalize continuous features
+    7. Remove zero-variance features
+
+    Returns:
+        x_train, y_train, x_test
+    """
+    import numpy as np
+
+    x_train = x_train_raw.copy()
+    x_test = x_test_raw.copy()
+    y_train = y_train_raw.copy()
+
+    # -------------------------
+    # Step 1: Handle outliers
+    # -------------------------
+    if outlier_strategy == 'none':
+        x_train = no_outlier_removal(x_train)
+        x_test = no_outlier_removal(x_test)
+    elif outlier_strategy == 'smart':
+        x_train = smart_outlier_removal(x_train, factor=3.0)
+        x_test = smart_outlier_removal(x_test, factor=3.0)
+    elif outlier_strategy == 'aggressive':
+        x_train = smart_outlier_removal(x_train, factor=1.5)
+        x_test = smart_outlier_removal(x_test, factor=1.5)
+
+    # -------------------------
+    # Step 2: Remove sparse features and rows
+    # -------------------------
+    feature_mask = np.isnan(x_train).mean(axis=0) < threshold_features
+    x_train = x_train[:, feature_mask]
+    x_test = x_test[:, feature_mask]
+
+    row_mask = np.isnan(x_train).mean(axis=1) < threshold_points
+    x_train = x_train[row_mask]
+    y_train = y_train[row_mask]
+
+    # -------------------------
+    # Step 3: Fill remaining NaNs with median
+    # -------------------------
+    for i in range(x_train.shape[1]):
+        median_val = np.nanmedian(x_train[:, i])
+        x_train[:, i] = np.nan_to_num(x_train[:, i], nan=median_val)
+        x_test[:, i] = np.nan_to_num(x_test[:, i], nan=median_val)
+
+    # -------------------------
+    # Step 4: Identify categorical vs continuous
+    # -------------------------
+    n_features = x_train.shape[1]
+    is_categorical = np.zeros(n_features, dtype=bool)
+    for i in range(n_features):
+        n_unique = len(np.unique(x_train[:, i]))
+        is_int = np.allclose(x_train[:, i], x_train[:, i].astype(int))
+        if n_unique <= 10 or (is_int and n_unique <= 50):
+            is_categorical[i] = True
+
+    continuous_mask = ~is_categorical
+    print(f"Categorical features: {is_categorical.sum()}")
+    print(f"Continuous features: {continuous_mask.sum()}")
+
+    # -------------------------
+    # Step 5: Normalize continuous features
+    # -------------------------
+    if normalize and continuous_mask.sum() > 0:
+        print(f"\n=== NORMALIZING CONTINUOUS FEATURES ===")
+        median = np.median(x_train[:, continuous_mask], axis=0)
+        q75 = np.percentile(x_train[:, continuous_mask], 75, axis=0)
+        q25 = np.percentile(x_train[:, continuous_mask], 25, axis=0)
+        iqr = q75 - q25
+        zero_iqr_mask = iqr == 0
+        iqr[zero_iqr_mask] = 1.0
+
+        x_train[:, continuous_mask] = (x_train[:, continuous_mask] - median) / iqr
+        x_test[:, continuous_mask]  = (x_test[:, continuous_mask] - median) / iqr
+
+        x_train[:, continuous_mask] = np.clip(x_train[:, continuous_mask], -10, 10)
+        x_test[:, continuous_mask]  = np.clip(x_test[:, continuous_mask], -10, 10)
+        print(f"Normalized {continuous_mask.sum()} continuous features")
+
+    # -------------------------
+    # Step 6: Encode categorical features
+    # -------------------------
+    print(f"\n=== ENCODING CATEGORICAL FEATURES ===")
+    ONE_HOT_THRESHOLD = 20
+    x_train_encoded = []
+    x_test_encoded = []
+
+    for i in range(n_features):
+        if is_categorical[i]:
+            unique_vals, counts = np.unique(x_train[:, i], return_counts=True)
+            n_unique = len(unique_vals)
+
+            if n_unique <= ONE_HOT_THRESHOLD:
+                value_map = {val: idx for idx, val in enumerate(unique_vals)}
+                n_classes = len(unique_vals)
+                train_idx = np.vectorize(value_map.get)(x_train[:, i])
+                test_idx  = np.vectorize(lambda v: value_map.get(v, -1))(x_test[:, i])
+                train_onehot = np.eye(n_classes)[train_idx.astype(int)]
+                test_onehot  = np.eye(n_classes)[np.clip(test_idx, 0, n_classes-1).astype(int)]
+                x_train_encoded.append(train_onehot)
+                x_test_encoded.append(test_onehot)
+            else:
+                freq_map = {val: c / len(x_train[:, i]) for val, c in zip(unique_vals, counts)}
+                train_freq = np.vectorize(freq_map.get)(x_train[:, i])
+                test_freq  = np.vectorize(lambda v: freq_map.get(v, 0.0))(x_test[:, i])
+                x_train_encoded.append(train_freq[:, None])
+                x_test_encoded.append(test_freq[:, None])
+        else:
+            x_train_encoded.append(x_train[:, i][:, None])
+            x_test_encoded.append(x_test[:, i][:, None])
+
+    # Concatenate all features
+    x_train = np.hstack(x_train_encoded)
+    x_test  = np.hstack(x_test_encoded)
+    print(f"Final shapes after encoding: x_train={x_train.shape}, x_test={x_test.shape}")
+
+    # -------------------------
+    # Step 7: Remove zero-variance features
+    # -------------------------
+    feature_vars = np.var(x_train, axis=0)
+    valid_features = feature_vars > 1e-10
+    n_removed = np.sum(~valid_features)
+    if n_removed > 0:
+        print(f"Removing {n_removed} zero-variance features")
+        x_train = x_train[:, valid_features]
+        x_test = x_test[:, valid_features]
+
+    # -------------------------
+    # Final diagnostics
+    # -------------------------
+    print(f"\n=== FINAL DATA SUMMARY ===")
+    print(f"Training shape: {x_train.shape}, Test shape: {x_test.shape}")
+    print(f"Overall - min: {x_train.min():.3f}, max: {x_train.max():.3f}, mean: {x_train.mean():.3f}")
+    print(f"Max absolute value: {np.abs(x_train).max():.3f}")
+    print(f"NaNs in train: {np.isnan(x_train).sum()}, test: {np.isnan(x_test).sum()}")
+
+    return x_train, y_train, x_test
+
+# ============ FONCTION DE TEST ============
+
+def compare_outlier_strategies(x_train_raw, y_train_raw):
+    """
+    Compare les 3 stratégies d'outliers sur un modèle simple.
+    """
+    import implementations as impl
+    
+    results = {}
+    
+    for strategy in ['none', 'smart', 'aggressive']:
+        print("\n" + "="*70)
+        print(f"TESTING STRATEGY: {strategy.upper()}")
+        print("="*70)
+        
+        # Preprocess
+        x_train, _, removed_points = fill_data_v2(
+            x_train_raw.copy(),
+            threshold=True,
+            threshold_features=0.8,
+            threshold_points=0.6,
+            normalize=True,
+            outlier_strategy=strategy
+        )
+        
+        y_train = np.delete(y_train_raw, removed_points)
+        
+        # Add bias
+        x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
+        
+        # Train simple model (least squares)
+        w, loss = impl.least_squares(y_train, x_train_bias)
+        
+        # Evaluate
+        y_pred_cont = x_train_bias @ w
+        
+        # Find best threshold
+        best_f1 = 0
+        for t in np.linspace(y_pred_cont.min(), y_pred_cont.max(), 50):
+            y_pred = np.where(y_pred_cont >= t, 1, -1)
+            tp = np.sum((y_pred == 1) & (y_train == 1))
+            fp = np.sum((y_pred == 1) & (y_train == -1))
+            fn = np.sum((y_pred == -1) & (y_train == 1))
+            
+            p = tp / (tp + fp) if (tp + fp) > 0 else 0
+            r = tp / (tp + fn) if (tp + fn) > 0 else 0
+            f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0
+            
+            if f1 > best_f1:
+                best_f1 = f1
+        
+        results[strategy] = {
+            'f1': best_f1,
+            'n_samples': x_train.shape[0],
+            'n_features': x_train.shape[1]
+        }
+        
+        print(f"\n✓ Strategy '{strategy}': F1 = {best_f1:.4f}")
+        print(f"  Samples: {x_train.shape[0]}, Features: {x_train.shape[1]}")
+    
+    print("\n" + "="*70)
+    print("COMPARISON SUMMARY")
+    print("="*70)
+    for strategy, res in results.items():
+        print(f"{strategy:12s}: F1={res['f1']:.4f}  |  Samples={res['n_samples']:5d}  |  Features={res['n_features']:3d}")
+    
+    best = max(results.items(), key=lambda x: x[1]['f1'])
+    print(f"\n🏆 WINNER: {best[0].upper()} (F1={best[1]['f1']:.4f})")
+    
+    return results
 
 
 if __name__ == "__main__":
@@ -486,5 +1057,3 @@ if __name__ == "__main__":
     print(filled_x_train.shape)
     print(filled_x_test.shape)
     print(y_train.shape)
-
-
