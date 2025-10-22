@@ -119,6 +119,57 @@ def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = Tr
 
     return x_train,y_train,x_test,train_ids, test_ids
 
+def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart'):
+    """
+    Load raw training and test data, preprocess it, and return cleaned datasets
+    ready for ML models. Handles missing values, feature removal, outlier removal,
+    and normalization.
+
+    INPUTS:
+        - threshold_features (float): Max fraction of missing values allowed per feature.
+        - threshold_points (float): Max fraction of missing values allowed per data point (row).
+        - normalize (bool): If True, normalize continuous features.
+        - outlier_strategy (str): 'none', 'smart', or 'aggressive' outlier handling.
+
+    OUTPUTS:
+        - x_train (np.ndarray): Preprocessed training features.
+        - y_train (np.ndarray): Aligned labels for x_train.
+        - x_test (np.ndarray): Preprocessed test features aligned with x_train.
+        - train_ids (np.ndarray): Original training IDs.
+        - test_ids (np.ndarray): Original test IDs.
+    """
+    import os
+    import numpy as np
+
+    dir_path = os.path.dirname(os.path.realpath(__file__)) + '/data/dataset/'
+    
+    # Load raw data
+    print("Loading raw data...")
+    x_train_raw, x_test_raw, y_train_raw, train_ids, test_ids = hl.load_csv_data(dir_path)
+    print(f"Raw train shape: {x_train_raw.shape}, test shape: {x_test_raw.shape}, labels shape: {y_train_raw.shape}")
+    
+    # Add this at the start of prepare_data2
+    print(f"RAW data - Train min: {x_train_raw.min()}, max: {x_train_raw.max()}")
+    print(f"RAW data - Unique values sample: {np.unique(x_train_raw[:, 0])[:10]}")
+    print(f"RAW labels: {np.unique(y_train_raw)}")
+    # Apply robust preprocessing pipeline
+    print("\nApplying robust preprocessing pipeline...")
+    x_train, y_train, x_test = de.fill_data_robust3(
+        x_train_raw,
+        x_test_raw,
+        y_train_raw,
+        threshold_features=threshold_features,
+        threshold_points=threshold_points,
+        normalize=normalize,
+        outlier_strategy=outlier_strategy
+    )
+    
+    print(f"\nFinal training data shape: {x_train.shape}, test data shape: {x_test.shape}")
+    print(f"Final labels shape: {y_train.shape}")
+    print(f"Remaining NaNs in train: {np.isnan(x_train).sum()}, test: {np.isnan(x_test).sum()}")
+    
+    return x_train, y_train, x_test, train_ids, test_ids
+
 def accuracy(y_true,y_pred):
     return np.mean(y_true == y_pred)
 
@@ -183,6 +234,19 @@ def compute_f1_score_KNN(y_true, y_pred):
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
     return f1, tp, fp, fn
 
+def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
+            plt.figure(figsize=(7, 5))
+            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
+            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
+            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
+            plt.legend()
+            plt.grid(True)
+            plt.tight_layout()
+            plt.savefig(f"{filename}")
+            print(f"Saved plot: {filename}")
+            plt.show()
 
 def continuous_to_class(pred_cont,threshold =0.2):
     return np.where(pred_cont >= threshold, 1, -1)
@@ -333,22 +397,8 @@ def train_mean_square_error_gd(
 
     # ---- Plot results ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_GD_F1_VS_gamma.png","MSE_GD",best_gamma)
-    plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_GD_acc_VS_gamma.png","MSE_GD",best_gamma)
+        plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_GD_F1_VS_gamma.png","MSE_GD",best_gamma)
+        plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_GD_acc_VS_gamma.png","MSE_GD",best_gamma)
     
 def train_mean_square_error_sgd(
         y_train,
@@ -465,22 +515,8 @@ def train_mean_square_error_sgd(
 
     # ---- Plot results ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_SGD_F1_VS_gamma.png","MSE_SGD",best_gamma)
-    plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_SGD_acc_VS_gamma.png","MSE_SGD",best_gamma)
+        plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_SGD_F1_VS_gamma.png","MSE_SGD",best_gamma)
+        plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_SGD_acc_VS_gamma.png","MSE_SGD",best_gamma)
     
 def train_least_squares(
         y_train,
@@ -539,22 +575,8 @@ def train_least_squares(
     best_y_train_pred_binary = np.where(y_train_pred >= best_threshold, 1, -1)
     # --- Plot results ---
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(thresholds, f1s,"threshold", "F1", "blue", "least_squares_F1_VS_threshold.png","Least_squares",best_threshold)
-    plot_and_save(thresholds, accs,"threshold", "Accuracy", "orange", "least_squares_Accuracy_VS_threshold.png","Least_squares",best_threshold)
+        plot_and_save(thresholds, f1s,"threshold", "F1", "blue", "least_squares_F1_VS_threshold.png","Least_squares",best_threshold)
+        plot_and_save(thresholds, accs,"threshold", "Accuracy", "orange", "least_squares_Accuracy_VS_threshold.png","Least_squares",best_threshold)
     #plot_and_save(thresholds, mean_losses, "Loss", "green", "least_squares_Loss_VS_threshold.png","Least_squares")
 
 
@@ -874,21 +896,7 @@ def train_logistic_regression(
 
     # ---- Plot F1 vs gamma ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(gammas, f1_per_gamma,"gamma", "F1", "blue", "Log_Reg_F1_VS_gamma.png","Log_Reg",best_gamma)
+        plot_and_save(gammas, f1_per_gamma,"gamma", "F1", "blue", "Log_Reg_F1_VS_gamma.png","Log_Reg",best_gamma)
 
 def train_ridge_regression(
         y_train,
@@ -974,22 +982,8 @@ def train_ridge_regression(
 
     # ---- Plot loss vs lambda ----
     if save_plots:
-        def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
-            plt.figure(figsize=(7, 5))
-            plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-            plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
-            plt.xlabel(xlabel)
-            plt.ylabel(ylabel)
-            plt.title(f"{model_name}: {ylabel} vs {xlabel}")
-            plt.legend()
-            plt.grid(True)
-            plt.tight_layout()
-            plt.savefig(f"{filename}")
-            print(f"Saved plot: {filename}")
-            plt.show()
-
-    plot_and_save(lambdas, mean_f1s,"lambda", "F1", "blue", "Ridge_Reg_F1_VS_lambda.png","Ridge_Reg",best_lambda)
-    plot_and_save(lambdas,mean_losses,"lambda","Loss","orange","Ridge_Reg_Loss_VS_lambda.png","Ridge_Reg",best_lambda)
+        plot_and_save(lambdas, mean_f1s,"lambda", "F1", "blue", "Ridge_Reg_F1_VS_lambda.png","Ridge_Reg",best_lambda)
+        plot_and_save(lambdas,mean_losses,"lambda","Loss","orange","Ridge_Reg_Loss_VS_lambda.png","Ridge_Reg",best_lambda)
 
 
 
@@ -1118,8 +1112,11 @@ def train_knn(
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=10)
 #train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4)                            #F1 : 0.422
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=5)
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4, save_plots=True)            # F1: 0.424
+#x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=5)
+
+x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.5,threshold_points = 0.5, normalize = True,outlier_strategy='smart')
+
+train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4, save_plots=True)            # F1: 0.424
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=1000)
 #train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4)                            #F1 : 0.413
