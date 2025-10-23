@@ -119,7 +119,7 @@ def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = Tr
 
     return x_train,y_train,x_test,train_ids, test_ids
 
-def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart'):
+def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart', fill_method='median'):
     """
     Load raw training and test data, preprocess it, and return cleaned datasets
     ready for ML models. Handles missing values, feature removal, outlier removal,
@@ -161,7 +161,8 @@ def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, 
         threshold_features=threshold_features,
         threshold_points=threshold_points,
         normalize=normalize,
-        outlier_strategy=outlier_strategy
+        outlier_strategy=outlier_strategy,
+        fill_method=fill_method
     )
     
     print(f"\nFinal training data shape: {x_train.shape}, test data shape: {x_test.shape}")
@@ -755,7 +756,7 @@ def train_reg_logistic_regression(
 
 
     path = os.path.dirname(os.path.realpath(__file__))
-    output_path = path + "/submission_v7.csv"
+    output_path = path + "/submission_v8.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
     # ---- Plot F1 scores only ----
@@ -1114,9 +1115,12 @@ def train_knn(
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=5)
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.5,threshold_points = 0.5, normalize = True,outlier_strategy='smart')
+x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
 
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4, save_plots=True)            # F1: 0.424
+train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4, save_plots=True)            
+#threshold: 0.5 #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298      
+#threshold: 0.8 #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309           -- best so far: smart, mode, threshold 0.8
+
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=1000)
 #train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4)                            #F1 : 0.413

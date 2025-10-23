@@ -838,7 +838,7 @@ def fill_data_robust2(x_train_raw, x_test_raw, y_train_raw,
 
 def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
                        threshold_features=0.8, threshold_points=0.6,
-                       normalize=True, outlier_strategy='none'):
+                       normalize=True, outlier_strategy='none', fill_method='median'):
     """
     Robust preprocessing pipeline for training and test data.
 
@@ -885,12 +885,18 @@ def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
     y_train = y_train[row_mask]
 
     # -------------------------
-    # Step 3: Fill remaining NaNs with median
+    # Step 3: Fill remaining NaNs with median or mode
     # -------------------------
-    for i in range(x_train.shape[1]):
-        median_val = np.nanmedian(x_train[:, i])
-        x_train[:, i] = np.nan_to_num(x_train[:, i], nan=median_val)
-        x_test[:, i] = np.nan_to_num(x_test[:, i], nan=median_val)
+    if fill_method == 'median':
+        for i in range(x_train.shape[1]):
+            median_val = np.nanmedian(x_train[:, i])
+            x_train[:, i] = np.nan_to_num(x_train[:, i], nan=median_val)
+            x_test[:, i] = np.nan_to_num(x_test[:, i], nan=median_val)
+
+    elif fill_method == 'mode':
+        for i in range(x_train.shape[1]):
+            x_train[:, i] = fill_column_mode(x_train[:, i])
+            x_test[:, i] = fill_column_mode(x_test[:, i])
 
     # -------------------------
     # Step 4: Identify categorical vs continuous
