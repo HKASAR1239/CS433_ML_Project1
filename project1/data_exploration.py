@@ -4,6 +4,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import implementations as im
+import helpers as hl
 
 #load data from a csv file
 def load_data(file_name):
@@ -50,7 +51,7 @@ def remove_missing_features(data, threshold=0.8):
     features_to_remove = [i for i, missing in enumerate(missing_data) if missing > threshold]
     return data[:, features_to_keep], features_to_remove
 
-def assess_missing_data_points(data, threshold=0.8):
+def assess_missing_data_points(data):
     """Assess the percentage of missing features for each sample in the dataset.
 
     input:
@@ -453,33 +454,10 @@ def build_k_indices_knn(y: np.ndarray, k_fold: int, percent_data: float, seed: i
     k_indices = [indices[k * interval : (k+1) * interval] for k in range(k_fold)]
     return np.array(k_indices)
 
-
-if __name__ == "__main__":
-    
-    x_train = load_data('x_train.csv')
-    x_test = load_data('x_test.csv')
-    y_train = load_data('y_train.csv')
-
-    filled_x_train, removed_features, removed_points = fill_data(x_train, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True)
-    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_train_f09-p06-n.csv', filled_x_train, delimiter=',')
-
-    # remove the same features and points from x_test as were removed from x_train
-    filled_x_test, _, _ = fill_data(x_test, remove_features = removed_features, remove_points = removed_points, threshold = False, normalize=True)
-    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_test_f09-p06-n.csv', filled_x_test, delimiter=',')
-
-    # remove the same points from y_train as were removed from x_train
-    y_train, _ = remove_missing_data_points(y_train, threshold=0.6)
-    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_y_train_f09-p06-n.csv', y_train, delimiter=',')
-
-    # Print the shape of the processed data to verify that the number of features and points match
-    print(filled_x_train.shape)
-    print(filled_x_test.shape)
-    print(y_train.shape)
-
 def clean_placeholders_only(data):
     """
-    Remplace UNIQUEMENT les valeurs placeholder qui sont clairement des erreurs.
-    Ne touche PAS aux vraies valeurs extrêmes qui peuvent être informatives.
+    Replace ONLY placeholder values that are clearly errors.
+    Do NOT touch real extreme values that may be informative.
     
     Input: numpy array of shape (n_samples, n_features)
     Output: numpy array with placeholders replaced by NaN
@@ -489,8 +467,8 @@ def clean_placeholders_only(data):
     print("\n=== CLEANING PLACEHOLDERS ===")
     initial_valid = np.sum(~np.isnan(data))
     
-    # Step 1: Valeurs placeholder évidentes
-    placeholder_values = [-999, -999999, 999999, -9999, 99999, 9999]
+    # Step 1: Obvious placeholder values
+    placeholder_values = [-999, -999999, 999999, -9999, 99999, 9999, 99000, 99900]
     for placeholder in placeholder_values:
         mask = np.isclose(data, placeholder, atol=1e-6)
         count = np.sum(mask)
@@ -498,8 +476,8 @@ def clean_placeholders_only(data):
             print(f"  Replacing {count} occurrences of {placeholder}")
             data[mask] = np.nan
     
-    # Step 2: Valeurs physiquement impossibles (très très extrêmes)
-    # Seulement si VRAIMENT absurde (>1 million, etc.)
+    # Step 2: Physically impossible values (very extreme)
+    # Only if REALLY absurd (>1 million, etc.)
     extreme_mask = np.abs(data) > 1e6
     extreme_count = np.sum(extreme_mask)
     if extreme_count > 0:
@@ -512,21 +490,20 @@ def clean_placeholders_only(data):
     
     return data
 
-
 def smart_outlier_removal(data, factor=3.0, per_feature_threshold=0.01):
     """
-    Suppression d'outliers intelligente pour données médicales.
+    Intelligent outlier removal for medical data.
     
-    Stratégie:
-    1. Remplace les placeholders uniquement
-    2. IQR très permissif (factor=3.0 au lieu de 1.5)
-    3. Limite à 1% d'outliers max par feature
-    4. Ne marque que les valeurs VRAIMENT extrêmes
+    Strategy:
+    1. Replace only placeholders
+    2. Very permissive IQR (factor=3.0 instead of 1.5)
+    3. Limit to 1% of max outliers per feature
+    4. Only mark truly extreme values
     
     Input:
         data: numpy array (n_samples, n_features)
-        factor: multiplicateur IQR (3.0 = très permissif)
-        per_feature_threshold: max % d'outliers à marquer par feature
+        factor: IQR multiplier (3.0 = very permissive)
+        per_feature_threshold: max % of outliers to mark per feature
     
     Output:
         data: numpy array with outliers replaced by NaN
@@ -542,43 +519,43 @@ def smart_outlier_removal(data, factor=3.0, per_feature_threshold=0.01):
     
     initial_nans = np.isnan(data).sum()
     
-    # Step 2: IQR permissif par feature
+    # Step 2: Permissive IQR per feature
     total_outliers_marked = 0
     
     for i in range(data.shape[1]):
         column = data[:, i].copy()
         valid_mask = ~np.isnan(column)
         
-        if np.sum(valid_mask) < 10:  # Skip features avec trop peu de données
+        if np.sum(valid_mask) < 10:  # Skip features with too little data
             continue
         
         valid_data = column[valid_mask]
         
-        # Calcul IQR
+        # Calculate IQR
         Q1 = np.percentile(valid_data, 25)
         Q3 = np.percentile(valid_data, 75)
         IQR_val = Q3 - Q1
         
-        if IQR_val == 0:  # Feature constante
+        if IQR_val == 0:  # Constant feature
             continue
         
-        # Bornes TRES permissives
+        # Very permissive bounds
         lower_bound = Q1 - factor * IQR_val
         upper_bound = Q3 + factor * IQR_val
         
-        # Identifie les outliers potentiels
+        # Identify potential outliers
         outlier_mask = ((column < lower_bound) | (column > upper_bound)) & valid_mask
         n_outliers = np.sum(outlier_mask)
         
-        # Limite: ne marque que si <1% de la feature
+        # Limit: only mark if <1% of the feature
         max_outliers = int(per_feature_threshold * np.sum(valid_mask))
         
         if n_outliers > 0 and n_outliers <= max_outliers:
             data[outlier_mask, i] = np.nan
             total_outliers_marked += n_outliers
         elif n_outliers > max_outliers:
-            # Si trop d'outliers détectés, c'est probablement une distribution asymétrique
-            # → Ne rien faire pour cette feature
+            # If too many outliers detected, it is probably a skewed distribution
+            # → Do nothing for this feature
             pass
     
     final_nans = np.isnan(data).sum()
@@ -598,8 +575,83 @@ def no_outlier_removal(data):
     """
     return clean_placeholders_only(data)
 
+def std_outlier_removal(data, std_threshold=5.0, per_feature_threshold=0.01):
+    """
+    Outlier removal for medical data based on the standard deviation and mean of the data. 
+    Data points that are more than a certain standard deviations threshold away from the mean are considered outliers and replaced with 0.
+    
+    Strategy:
+    1. Replace only placeholders
+    2. Standard deviation method
+    3. Limit to 1% of max outliers per feature
+    4. Only mark truly extreme values
+    
+    Input:
+        data: numpy array (n_samples, n_features)
+        std_threshold: number of standard deviations from the mean to consider as outlier
+        per_feature_threshold: max % of outliers to mark per feature
+    
+    Output:
+        data: numpy array with outliers replaced by 0
+    """
 
-# ============ MISE À JOUR DE fill_data ============
+    data = data.copy()
+    
+    print("\n=== STD OUTLIER REMOVAL ===")
+    print(f"STD threshold: {std_threshold}")
+    print(f"Max outliers per feature: {per_feature_threshold*100}%")
+    
+    # Step 1: Clean placeholders first
+    data = clean_placeholders_only(data)
+    
+    initial_nans = np.isnan(data).sum()
+    initial_0 = np.sum(data == 0)
+    
+    # Step 2: Std deviation method per feature
+    total_outliers_marked = 0
+    
+    for i in range(data.shape[1]):
+        column = data[:, i].copy()
+        valid_mask = ~np.isnan(column)
+        
+        if np.sum(valid_mask) < 10:  # Skip features with too little data
+            continue
+        
+        valid_data = column[valid_mask]
+        
+        mean_val = np.mean(valid_data)
+        std_val = np.std(valid_data)
+        
+        if std_val == 0:  # Constant feature
+            continue
+        
+        lower_bound = mean_val - std_threshold * std_val
+        upper_bound = mean_val + std_threshold * std_val
+        
+        # Identify potential outliers
+        outlier_mask = ((column < lower_bound) | (column > upper_bound)) & valid_mask
+        n_outliers = np.sum(outlier_mask)
+        
+        # Limit: only mark if <1% of the feature
+        max_outliers = int(per_feature_threshold * np.sum(valid_mask))
+        
+        if n_outliers > 0 and n_outliers <= max_outliers:
+            data[outlier_mask, i] = np.nan
+            total_outliers_marked += n_outliers
+        elif n_outliers > max_outliers:
+            # If too many outliers detected, it is probably a skewed distribution
+            # → Do nothing for this feature
+            pass
+    
+    final_nans = np.isnan(data).sum()
+    final_0 = np.sum(data == 0)
+    print(f"  Statistical outliers marked: {final_0 - initial_0} values")
+    print(f"  Total NaN: {final_nans} ({final_nans/data.size*100:.2f}%)")
+    
+    return data
+    
+
+# ============ fill_data UPDATE ============
 
 def fill_data_v2(data, 
                  remove_features=[], 
@@ -872,6 +924,9 @@ def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
     elif outlier_strategy == 'aggressive':
         x_train = smart_outlier_removal(x_train, factor=1.5)
         x_test = smart_outlier_removal(x_test, factor=1.5)
+    elif outlier_strategy == 'std':
+        x_train = std_outlier_removal(x_train, std_threshold=3.0)
+        x_test = std_outlier_removal(x_test, std_threshold=3.0)
 
     # -------------------------
     # Step 2: Remove sparse features and rows
@@ -991,7 +1046,7 @@ def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
 
     return x_train, y_train, x_test
 
-# ============ FONCTION DE TEST ============
+# ============ TEST FUNCTION ============
 
 def compare_outlier_strategies(x_train_raw, y_train_raw):
     """
@@ -1000,87 +1055,86 @@ def compare_outlier_strategies(x_train_raw, y_train_raw):
     import implementations as impl
     
     results = {}
-    
-    for strategy in ['none', 'smart', 'aggressive']:
-        print("\n" + "="*70)
-        print(f"TESTING STRATEGY: {strategy.upper()}")
-        print("="*70)
-        
-        # Preprocess
-        x_train, _, removed_points = fill_data_v2(
-            x_train_raw.copy(),
-            threshold=True,
-            threshold_features=0.8,
-            threshold_points=0.6,
-            normalize=True,
-            outlier_strategy=strategy
-        )
-        
-        y_train = np.delete(y_train_raw, removed_points)
-        
-        # Add bias
-        x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
-        
-        # Train simple model (least squares)
-        w, loss = impl.least_squares(y_train, x_train_bias)
-        
-        # Evaluate
-        y_pred_cont = x_train_bias @ w
-        
-        # Find best threshold
-        best_f1 = 0
-        for t in np.linspace(y_pred_cont.min(), y_pred_cont.max(), 50):
-            y_pred = np.where(y_pred_cont >= t, 1, -1)
-            tp = np.sum((y_pred == 1) & (y_train == 1))
-            fp = np.sum((y_pred == 1) & (y_train == -1))
-            fn = np.sum((y_pred == -1) & (y_train == 1))
+    i = 0
+    for strategy in ['none', 'smart', 'aggressive', 'std']:
+        for fill_method in ['median', 'mode']:
+            print("\n" + "="*70)
+            print(f"TESTING STRATEGY: {strategy.upper()}, {fill_method.upper()}")
+            print("="*70)
             
-            p = tp / (tp + fp) if (tp + fp) > 0 else 0
-            r = tp / (tp + fn) if (tp + fn) > 0 else 0
-            f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0
+            # Preprocess
+            x_train, y_train, x_test = fill_data_robust3(
+                x_train_raw.copy(),
+                x_train_raw.copy(),  # Dummy test set
+                y_train_raw.copy(),
+                threshold_features=0.8,
+                threshold_points=0.6,
+                normalize=True,
+                outlier_strategy=strategy,
+                fill_method=fill_method
+            )
             
-            if f1 > best_f1:
-                best_f1 = f1
+            # Add bias
+            x_train_bias = np.c_[np.ones(x_train.shape[0]), x_train]
+            
+            # Train simple model (least squares)
+            w, loss = impl.least_squares(y_train, x_train_bias)
+            
+            # Evaluate
+            y_pred_cont = x_train_bias @ w
+            
+            # Find best threshold
+            best_f1 = 0
+            for t in np.linspace(y_pred_cont.min(), y_pred_cont.max(), 50):
+                y_pred = np.where(y_pred_cont >= t, 1, -1)
+                tp = np.sum((y_pred == 1) & (y_train == 1))
+                fp = np.sum((y_pred == 1) & (y_train == -1))
+                fn = np.sum((y_pred == -1) & (y_train == 1))
+                
+                p = tp / (tp + fp) if (tp + fp) > 0 else 0
+                r = tp / (tp + fn) if (tp + fn) > 0 else 0
+                f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0
+                
+                if f1 > best_f1:
+                    best_f1 = f1
+            
+            results[i] = {
+                'strategy': strategy,
+                'fill_method': fill_method,
+                'f1': best_f1,
+                'n_samples': x_train.shape[0],
+                'n_features': x_train.shape[1]
+                
+            }
+            i += 1
+            print(f"\n✓ Strategy '{strategy}': F1 = {best_f1:.4f}")
+            print(f"  Samples: {x_train.shape[0]}, Features: {x_train.shape[1]}")
         
-        results[strategy] = {
-            'f1': best_f1,
-            'n_samples': x_train.shape[0],
-            'n_features': x_train.shape[1]
-        }
-        
-        print(f"\n✓ Strategy '{strategy}': F1 = {best_f1:.4f}")
-        print(f"  Samples: {x_train.shape[0]}, Features: {x_train.shape[1]}")
-    
     print("\n" + "="*70)
     print("COMPARISON SUMMARY")
     print("="*70)
-    for strategy, res in results.items():
-        print(f"{strategy:12s}: F1={res['f1']:.4f}  |  Samples={res['n_samples']:5d}  |  Features={res['n_features']:3d}")
+    for strategy_id, res in results.items():
+        print(f"{res['strategy'].upper():10s}, {res['fill_method'].upper():6s}: F1={res['f1']:.4f} | Samples={res['n_samples']:5d} | Features={res['n_features']:3d}")
+    #for strategy, res in results.items():
+    #    print(f"{strategy:12s}: F1={res['f1']:.4f}  |  Samples={res['n_samples']:5d}  |  Features={res['n_features']:3d}")
     
     best = max(results.items(), key=lambda x: x[1]['f1'])
-    print(f"\n🏆 WINNER: {best[0].upper()} (F1={best[1]['f1']:.4f})")
+    print(f"\n🏆 WINNER: {best[0]} (F1={best[1]['f1']:.4f})")
     
     return results
 
 
-if __name__ == "__main__":
+dir_path = os.path.dirname(os.path.realpath(__file__)) + '/data/dataset/'
     
-    x_train = load_data('x_train.csv')
-    x_test = load_data('x_test.csv')
-    y_train = load_data('y_train.csv')
+# Load raw data
+print("Loading raw data...")
+x_train_raw, x_test_raw, y_train_raw, train_ids, test_ids = hl.load_csv_data(dir_path)
+print(f"Raw train shape: {x_train_raw.shape}, test shape: {x_test_raw.shape}, labels shape: {y_train_raw.shape}")
 
-    filled_x_train, removed_features, removed_points = fill_data(x_train, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True)
-    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_train_f09-p06-n.csv', filled_x_train, delimiter=',')
+# Only keep 10% of data for quick testing 
+x_train_sample = x_train_raw[::10]
+y_train_sample = y_train_raw[::10]
 
-    # remove the same features and points from x_test as were removed from x_train
-    filled_x_test, _, _ = fill_data(x_test, remove_features = removed_features, remove_points = removed_points, threshold = False, normalize=True)
-    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_x_test_f09-p06-n.csv', filled_x_test, delimiter=',')
+# Compare outlier strategies
+compare_outlier_strategies(x_train_raw, y_train_raw)
 
-    # remove the same points from y_train as were removed from x_train
-    y_train, _ = remove_missing_data_points(y_train, threshold=0.6)
-    np.savetxt(os.path.dirname(os.path.realpath(__file__))+'/data/processed/filled_y_train_f09-p06-n.csv', y_train, delimiter=',')
-
-    # Print the shape of the processed data to verify that the number of features and points match
-    print(filled_x_train.shape)
-    print(filled_x_test.shape)
-    print(y_train.shape)

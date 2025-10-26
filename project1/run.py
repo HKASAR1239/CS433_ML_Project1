@@ -611,8 +611,7 @@ def train_reg_logistic_regression(
         gammas = np.logspace(-5,-2,5),
         lambdas = np.logspace(-4, -2, 4),
         threshold = 0.2,
-        max_iters=2000,   
-        duplicate = False,                               
+        max_iters=2000,                               
         k_fold=4,
         seed=42,
         save_plots=False):
@@ -655,22 +654,6 @@ def train_reg_logistic_regression(
     print(f"Training data with bias: {x_train_bias.shape}")
     print(f"Test data with bias: {x_test_bias.shape}")
 
-    if duplicate:
-        # Augment data by duplicating samples with label 1 in the training set
-        pos_indices = np.where(y_train_binary == 1)[0]
-        x_train_pos = x_train_bias[pos_indices]
-        y_train_pos = y_train_binary[pos_indices]
-        print("shape of positive samples :", np.shape(x_train_pos))
-        print("shape of y positive samples :", np.shape(y_train_pos))
-
-        # Duplicate positive samples in the final training set
-        x_train_bias_final = np.vstack((x_train_bias, x_train_pos))
-        y_train_binary_final = np.hstack((y_train_binary, y_train_pos))
-        # Shuffle the augmented dataset
-        shuffle_indices = np.random.permutation(len(y_train_binary_final))
-        x_train_bias = x_train_bias_final[shuffle_indices]
-        y_train_binary = y_train_binary_final[shuffle_indices]
-
     # Initialize weights 
     initial_w = np.zeros(x_train_bias.shape[1])
     initial_w[0] = np.log(n_1 / n_0)
@@ -693,15 +676,6 @@ def train_reg_logistic_regression(
                 X_tr, X_val = x_train_bias[train_idx], x_train_bias[val_idx]
                 y_tr, y_val = y_train_binary[train_idx], y_train_binary[val_idx]
 
-                if duplicate:
-                    # Augment data by duplicating samples with label 1 in the training set
-                    pos_indices = np.where(y_tr == 1)[0]
-                    X_tr_pos = X_tr[pos_indices]
-                    y_tr_pos = y_tr[pos_indices]
-                    X_tr = np.vstack((X_tr, X_tr_pos))
-                    y_tr = np.hstack((y_tr, y_tr_pos))
-
-
                 # Train
                 w,loss = impl.reg_logistic_regression(
                     y_tr, X_tr,
@@ -712,7 +686,7 @@ def train_reg_logistic_regression(
                 )
                 x = X_val @ w
                 print(x[0:10])
-                f1 = compute_f1_score(y_val, X_val, w, threshold)
+                f1,_,_,_ = compute_f1_score(y_val, X_val, w, threshold)
                 print(f1)
                 print(loss)
                 f1_scores.append(f1)
@@ -737,10 +711,7 @@ def train_reg_logistic_regression(
     # Training set predictions
     y_train_prob = impl._sigmoid(x_train_bias @ final_w)
     y_train_pred = (y_train_prob >= threshold).astype(int)
-    #print(f"final weight vector : {final_w} ")
-    #print("Some values of y_train_prob ")
     x = x_train_bias @ final_w
-    print(x[0:10])
     print(f"F1 score : {compute_f1_score(y_train_binary,x_train_bias,final_w,threshold)}")
     
     print(f"\nTraining predictions:")
@@ -996,8 +967,6 @@ def train_ridge_regression(
     y_pred = np.where(y_pred >= 0, 1, -1)
     return y_pred
 
-
-# Code a KNN classifier using only numpy (no other libraries)
 def knn_predict(x_train, y_train, x_test, k=3, factor=1):
     """
     K-Nearest Neighbors classifier.
@@ -1111,16 +1080,17 @@ def train_knn(
 
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=10)
-#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4)                            #F1 : 0.422
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4)                            #F1 : 0.422
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=5)
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
-
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4, save_plots=True)            
-#threshold: 0.5 #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298      
-#threshold: 0.8 #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309           -- best so far: smart, mode, threshold 0.8
+x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='none', fill_method='mode')
+train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=True)            
+#threshold: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229       
+#threshold: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
+                    #std (threshold=3), mode: F1: 0.4305
+#-- best so far: smart, mode, threshold 0.8
 
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=1000)
-#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], duplicate=False, threshold=0.2, k_fold=4)                            #F1 : 0.413
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4)                            #F1 : 0.413
