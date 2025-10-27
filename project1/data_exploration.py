@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import implementations as im
 import helpers as hl
 
-#load data from a csv file
+# ----------------------------------- LOADING DATA --------------------------------------------------------------
+
 def load_data(file_name):
     """Load data from a csv file.
     The csv file should be in the data/dataset/ folder relative to this file.
@@ -20,7 +21,7 @@ def load_data(file_name):
     data = np.array(np.genfromtxt(dir_path+file_name, delimiter=','))
     return data
 
-
+# ----------------------------------- DATA EXPLORATION ----------------------------------------------------------
 def assess_missing_features(data): 
     """Assess the percentage of missing data for each feature in the dataset.
 
@@ -84,7 +85,6 @@ def remove_missing_data_points(data, threshold=0.5):
     
     return data[points_to_keep, :], points_to_remove
 
-
 def fill_missing_data_mode(data):
     """Fill missing data with the mode of the feature.
 
@@ -115,7 +115,6 @@ def fill_column_mode(column):
     column[np.isnan(column)] = mode
     return column
 
-
 def fill_missing_data_0(data):
     """Fill missing data with 0.
 
@@ -128,6 +127,7 @@ def fill_missing_data_0(data):
     data[np.isnan(data)] = 0
     return data
 
+# ----------------------------------- HELPERS FOR DATA PROCESSING -----------------------------------------------
 
 def get_variance(data):
     """Get the variance of each feature in the dataset.
@@ -142,58 +142,6 @@ def get_variance(data):
     for column in data.T:
         variance.append(np.nanvar(column))
     return variance
-
-def correlation_matrix_features(data,threshold =0.9):
-    """
-    Return the matrix of correlation of features for a dataset
-    """
-    corr_matrix = np.corrcoef(data,rowvar = False)
-    return corr_matrix
-
-def find_corr_clusters(corr_matrix, threshold=0.9):
-    """
-    Given a correlation matrix, returns clusters of features.
-    """
-    n_features = corr_matrix.shape[0]
-    clusters = []
-    visited = set()
-
-    for i in range(n_features):
-        if i in visited:
-            continue
-        cluster = set([i])
-        for j in range(i+1, n_features):
-            if abs(corr_matrix[i,j]) > threshold:
-                cluster.add(j)
-        if len(cluster) > 1:
-            clusters.append(cluster)
-        visited.update(cluster)
-    return clusters
-
-def merge_correlated_features(data,threshold=0.9,verbose = True):
-    """
-    Merge correlated features by averaging them.
-    """
-    corr_matrix = correlation_matrix_features(data, threshold)
-    clusters = find_corr_clusters(corr_matrix, threshold=threshold)
-
-    X_new = data.copy()
-    features_removed = []
-
-    for cluster in clusters:
-        cluster_indices = list(cluster)  # convert set → list of ints
-        merged_feature = np.mean(X_new[:, cluster_indices], axis=1)
-        X_new = np.hstack([X_new, merged_feature.reshape(-1,1)])
-        features_removed.extend(cluster_indices)
-
-    # Optionally remove original features that were merged
-    X_new = np.delete(X_new, features_removed, axis=1)
-
-    if verbose:
-        print(f"Merged {len(clusters)} clusters of correlated features.")
-        print(f"Removed {len(features_removed)} original features.")
-
-    return X_new,removed_features
 
 def IQR(data, factor=1.5):
     """
@@ -239,8 +187,6 @@ def IQR(data, factor=1.5):
     
     return data
 
-
-
 def plot_missing_data(missing_data, title):
     print(np.mean(missing_data))  # Print average percentage of missing data across all features
     print(np.median(missing_data))  # Print median percentage of missing data across all features
@@ -263,114 +209,6 @@ def normalize_feature(column):
         return column - mean
     return (column - mean) / std
 
-
-
-def fill_data(data, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True,remove_outliers=True):
-    """ Pre-process the data before feeding it to the model.
-    Remove data points or features with percentage of missing data above a certain threshold if threshold is True (for training data).
-    Remove specified features and data points if remove_features and remove_points are not empty (for test data).
-    Fill features that have only one type of value (except np.nan) with 0.
-    Fill remaining missing data with the mode of the feature.
-    Optionally normalize the data to have mean 0 and variance 1.
-    
-    input:
-    data: numpy array of shape (n_samples, n_features)
-    remove_features: list of int, indices of features to remove
-    remove_points: list of int, indices of data points to remove
-    threshold_features: float, percentage of missing data above which a feature is removed
-    threshold_points: float, percentage of missing features above which a data point is removed
-    normalize: bool, whether to normalize the data to have mean 0 and variance 1
-
-    output:
-    data: numpy array of shape (n_samples_removed, n_features_removed), final pre-processed data
-    removed_features: list of int, indices of features that were removed
-    removed_points: list of int, indices of data points that were removed
-    """
-    #Remove specified features and points
-    data = np.delete(data, remove_features, axis=1)
-    data = np.delete(data, remove_points, axis=0)
-
-    if remove_outliers:
-        data = IQR(data)
-
-    if threshold: # remove features and points based on threshold
-
-        #data,removed_features_merged = merge_correlated_features(data,threshold = 0.9)
-        data, removed_features = remove_missing_features(data, threshold=threshold_features)
-        data, removed_points = remove_missing_data_points(data, threshold=threshold_points) 
-    else: # do not remove features and points based on threshold
-        removed_features = []
-        removed_points = []
-
-    
-    # for i in range(data.shape[1]):
-
-    #     column = data[:, i]
-
-    #     if np.all(np.isnan(column)): # if all values are np.nan, skip
-    #         continue
-
-    #     if np.all(~np.isnan(column)): # if there is no missing data, skip
-    #         if normalize:
-    #             column = normalize_feature(column)
-    #         data[:, i] = column
-    #         continue
-
-    #     unique_values = np.unique(column[~np.isnan(column)]) # unique values excluding np.nan
-    #     if len(unique_values) == 1: # check if there is only one unique value (except np.nan)
-    #         column = fill_missing_data_0(column)
-
-    #     else:
-    #         column = fill_column_mode(column) 
-        
-
-    #     if normalize:
-    #         column = normalize_feature(column)
-        
-    #     data[:, i] = column
-    print("Filling missing values...")
-    for i in range(data.shape[1]):
-        column = data[:, i].copy()
-        
-        # Case 1: All NaN - fill with 0
-        if np.all(np.isnan(column)):
-            data[:, i] = 0
-            continue
-        
-        # Case 2: No NaN - just normalize if needed
-        if not np.any(np.isnan(column)):
-            if normalize:
-                data[:, i] = normalize_feature(column)
-            continue
-        
-        # Case 3: Some NaN - fill them
-        unique_values = np.unique(column[~np.isnan(column)])
-        
-        if len(unique_values) == 1:
-            # Only one unique value - fill NaN with that value
-            data[:, i] = fill_missing_data_0(column)
-        else:
-            # Multiple values - fill with mode
-            data[:, i] = fill_column_mode(column)
-        
-        # Safety check: ensure no NaN remain
-        if np.any(np.isnan(data[:, i])):
-            print(f"Warning: Column {i} still has NaN, filling with median")
-            median_val = np.nanmedian(data[:, i])
-            data[:, i] = np.nan_to_num(data[:, i], nan=median_val if not np.isnan(median_val) else 0)
-        
-        # Step 5: Normalize after filling
-        if normalize:
-            #data[:, i] = normalize_feature(data[:, i])
-            continue
-    
-    # Final safety check
-    assert not np.any(np.isnan(data)), "Data still contains NaN after fill_data!"
-        
-
-    return data, removed_features, removed_points
-
-# ------------------------------------------------- FUNCTIONS FOR DATA PROCESSING ---------------------------------------------
 def identify_categorical_features(data, max_unique_ratio=0.05):
     """
     Identify which features are categorical vs continuous.
@@ -411,6 +249,8 @@ def identify_categorical_features(data, max_unique_ratio=0.05):
             #print(f"  Feature {i}: Categorical ({n_unique} unique values)")
     
     return categorical_mask
+
+# ----------------------------------- HELPERS FOR CROSS VALIDATION ----------------------------------------------
 
 def build_k_indices(y: np.ndarray, k_fold: int, seed: int):
     """build k indices for k-fold.
@@ -453,6 +293,8 @@ def build_k_indices_knn(y: np.ndarray, k_fold: int, percent_data: float, seed: i
     indices = selected_indices
     k_indices = [indices[k * interval : (k+1) * interval] for k in range(k_fold)]
     return np.array(k_indices)
+
+# ----------------------------------- FUNCTIONS FOR OUTLIER TREATMENT -------------------------------------------
 
 def clean_placeholders_only(data):
     """
@@ -564,7 +406,6 @@ def smart_outlier_removal(data, factor=3.0, per_feature_threshold=0.01):
     
     return data
 
-
 def no_outlier_removal(data):
     """
     Supprime UNIQUEMENT les placeholders, garde toutes les vraies valeurs.
@@ -651,7 +492,109 @@ def std_outlier_removal(data, std_threshold=5.0, per_feature_threshold=0.01):
     return data
     
 
-# ============ fill_data UPDATE ============
+# ----------------------------------- DATA PROCESSING -----------------------------------------------------------
+def fill_data(data, remove_features = [], remove_points = [], threshold = True, threshold_features=0.9, threshold_points=0.6, normalize=True,remove_outliers=True):
+    """ Pre-process the data before feeding it to the model.
+    Remove data points or features with percentage of missing data above a certain threshold if threshold is True (for training data).
+    Remove specified features and data points if remove_features and remove_points are not empty (for test data).
+    Fill features that have only one type of value (except np.nan) with 0.
+    Fill remaining missing data with the mode of the feature.
+    Optionally normalize the data to have mean 0 and variance 1.
+    
+    input:
+    data: numpy array of shape (n_samples, n_features)
+    remove_features: list of int, indices of features to remove
+    remove_points: list of int, indices of data points to remove
+    threshold_features: float, percentage of missing data above which a feature is removed
+    threshold_points: float, percentage of missing features above which a data point is removed
+    normalize: bool, whether to normalize the data to have mean 0 and variance 1
+
+    output:
+    data: numpy array of shape (n_samples_removed, n_features_removed), final pre-processed data
+    removed_features: list of int, indices of features that were removed
+    removed_points: list of int, indices of data points that were removed
+    """
+    #Remove specified features and points
+    data = np.delete(data, remove_features, axis=1)
+    data = np.delete(data, remove_points, axis=0)
+
+    if remove_outliers:
+        data = IQR(data)
+
+    if threshold: # remove features and points based on threshold
+        data, removed_features = remove_missing_features(data, threshold=threshold_features)
+        data, removed_points = remove_missing_data_points(data, threshold=threshold_points) 
+    else: # do not remove features and points based on threshold
+        removed_features = []
+        removed_points = []
+
+    
+    # for i in range(data.shape[1]):
+
+    #     column = data[:, i]
+
+    #     if np.all(np.isnan(column)): # if all values are np.nan, skip
+    #         continue
+
+    #     if np.all(~np.isnan(column)): # if there is no missing data, skip
+    #         if normalize:
+    #             column = normalize_feature(column)
+    #         data[:, i] = column
+    #         continue
+
+    #     unique_values = np.unique(column[~np.isnan(column)]) # unique values excluding np.nan
+    #     if len(unique_values) == 1: # check if there is only one unique value (except np.nan)
+    #         column = fill_missing_data_0(column)
+
+    #     else:
+    #         column = fill_column_mode(column) 
+        
+
+    #     if normalize:
+    #         column = normalize_feature(column)
+        
+    #     data[:, i] = column
+    print("Filling missing values...")
+    for i in range(data.shape[1]):
+        column = data[:, i].copy()
+        
+        # Case 1: All NaN - fill with 0
+        if np.all(np.isnan(column)):
+            data[:, i] = 0
+            continue
+        
+        # Case 2: No NaN - just normalize if needed
+        if not np.any(np.isnan(column)):
+            if normalize:
+                data[:, i] = normalize_feature(column)
+            continue
+        
+        # Case 3: Some NaN - fill them
+        unique_values = np.unique(column[~np.isnan(column)])
+        
+        if len(unique_values) == 1:
+            # Only one unique value - fill NaN with that value
+            data[:, i] = fill_missing_data_0(column)
+        else:
+            # Multiple values - fill with mode
+            data[:, i] = fill_column_mode(column)
+        
+        # Safety check: ensure no NaN remain
+        if np.any(np.isnan(data[:, i])):
+            print(f"Warning: Column {i} still has NaN, filling with median")
+            median_val = np.nanmedian(data[:, i])
+            data[:, i] = np.nan_to_num(data[:, i], nan=median_val if not np.isnan(median_val) else 0)
+        
+        # Step 5: Normalize after filling
+        if normalize:
+            #data[:, i] = normalize_feature(data[:, i])
+            continue
+    
+    # Final safety check
+    assert not np.any(np.isnan(data)), "Data still contains NaN after fill_data!"
+        
+
+    return data, removed_features, removed_points
 
 def fill_data_v2(data, 
                  remove_features=[], 
@@ -884,7 +827,7 @@ def fill_data_robust2(x_train_raw, x_test_raw, y_train_raw,
     print(f"NaNs in train: {np.isnan(x_train).sum()}, test: {np.isnan(x_test).sum()}")
     
     if np.abs(x_train).max() > 100:
-        print(f"  ⚠️ WARNING: Large values still present! Max = {np.abs(x_train).max():.1f}")
+        print(f" WARNING: Large values still present! Max = {np.abs(x_train).max():.1f}")
     
     return x_train, y_train, x_test
 
@@ -913,7 +856,7 @@ def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
     y_train = y_train_raw.copy()
 
     # -------------------------
-    # Step 1: Handle outliers
+    # Step 1: Handle outliers with custom outlier strategy
     # -------------------------
     if outlier_strategy == 'none':
         x_train = no_outlier_removal(x_train)
@@ -988,7 +931,7 @@ def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
         print(f"Normalized {continuous_mask.sum()} continuous features")
 
     # -------------------------
-    # Step 6: Encode categorical features
+    # Step 6: Encode categorical features using one-hot encoding.
     # -------------------------
     print(f"\n=== ENCODING CATEGORICAL FEATURES ===")
     ONE_HOT_THRESHOLD = 20
@@ -1046,11 +989,11 @@ def fill_data_robust3(x_train_raw, x_test_raw, y_train_raw,
 
     return x_train, y_train, x_test
 
-# ============ TEST FUNCTION ============
+# ==================================== TEST FUNCTION FOR OUTLIER STRATEGIES COMPARISON ===========================
 
 def compare_outlier_strategies(x_train_raw, y_train_raw):
     """
-    Compare les 3 stratégies d'outliers sur un modèle simple.
+    Compare all three strategies with a simple model, here least squares. 
     """
     import implementations as impl
     
@@ -1065,7 +1008,7 @@ def compare_outlier_strategies(x_train_raw, y_train_raw):
             # Preprocess
             x_train, y_train, x_test = fill_data_robust3(
                 x_train_raw.copy(),
-                x_train_raw.copy(),  # Dummy test set
+                x_train_raw.copy(),  # Dummy test set, it is the reason why we see twice the same printing
                 y_train_raw.copy(),
                 threshold_features=0.8,
                 threshold_points=0.6,
@@ -1119,11 +1062,11 @@ def compare_outlier_strategies(x_train_raw, y_train_raw):
     #    print(f"{strategy:12s}: F1={res['f1']:.4f}  |  Samples={res['n_samples']:5d}  |  Features={res['n_features']:3d}")
     
     best = max(results.items(), key=lambda x: x[1]['f1'])
-    print(f"\n🏆 WINNER: {best[0]} (F1={best[1]['f1']:.4f})")
+    print(f" WINNER: {best[0]} (F1={best[1]['f1']:.4f})")
     
     return results
 
-
+"""
 dir_path = os.path.dirname(os.path.realpath(__file__)) + '/data/dataset/'
     
 # Load raw data
@@ -1137,4 +1080,5 @@ y_train_sample = y_train_raw[::10]
 
 # Compare outlier strategies
 compare_outlier_strategies(x_train_raw, y_train_raw)
+"""
 

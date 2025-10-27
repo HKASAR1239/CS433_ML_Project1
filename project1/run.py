@@ -20,6 +20,8 @@ LAMBDA = 0.001
 # best gamma / best lambda : 0.1 0.0001
 # Training F1 score: 0.413
 
+# ----------------------------------- DATA PROCESSING -----------------------------------------------------------
+
 def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, remove_outliers = False, aberrant_threshold = 10.0):
     """
         Load the raw training and test data, preprocess it, and return cleaned datasets 
@@ -171,6 +173,7 @@ def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, 
     
     return x_train, y_train, x_test, train_ids, test_ids
 
+# ----------------------------------- HELPERS FOR EVALUATION -----------------------------------------------------
 def accuracy(y_true,y_pred):
     return np.mean(y_true == y_pred)
 
@@ -235,7 +238,10 @@ def compute_f1_score_KNN(y_true, y_pred):
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
     return f1, tp, fp, fn
 
+# ----------------------------------- HELPERS FOR PLOTING RESULTS ---------------------------------------------------
 def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
+            dir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'plots')
+            full_path = os.path.join(dir_path, filename)
             plt.figure(figsize=(7, 5))
             plt.plot(x, y, label=ylabel, linewidth=2, color=color)
             plt.axvline(best_param, color='r', linestyle='--', label=f"Best {xlabel}")
@@ -245,44 +251,12 @@ def plot_and_save(x, y, xlabel,ylabel, color, filename,model_name,best_param):
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
-            plt.savefig(f"{filename}")
+            filename = dir_path + filename
+            plt.savefig(f"{full_path}")
             print(f"Saved plot: {filename}")
             plt.show()
 
-def continuous_to_class(pred_cont,threshold =0.2):
-    return np.where(pred_cont >= threshold, 1, -1)
-
-# Basic confusion counts (expects y_true and y_pred in {-1,1})
-def compute_f1_score_ridge(y_true, X, weights, threshold=0.0):
-    """
-    Compute F1 score for ridge regression treated as classification.
-
-    Inputs:
-      - y_true: np.ndarray of shape (n_samples,) with labels in {-1, 1}
-      - X: np.ndarray of shape (n_samples, n_features)
-      - weights: np.ndarray of shape (n_features,)
-      - threshold: float, default=0.0 — classification threshold on raw predictions
-
-    Returns:
-      - f1: float — F1 score
-    """
-    # Continuous predictions
-    y_pred_cont = X @ weights
-    # Convert to binary {-1, 1}
-    y_pred = np.where(y_pred_cont >= threshold, 1, -1)
-
-    # Compute F1 score
-    tp = np.sum((y_pred == 1) & (y_true == 1))
-    fp = np.sum((y_pred == 1) & (y_true == -1))
-    fn = np.sum((y_pred == -1) & (y_true == 1))
-
-    print(tp,fp,fn)
-
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-    return f1
-
+# ----------------------------------- TRAINING FUNCTIONS  ------------------------------------------------------------
 def train_mean_square_error_gd(
         y_train,
         x_train,
@@ -1076,7 +1050,7 @@ def train_knn(
 
     return plot_f1_scores, parameters
 
-
+# ----------------------------------- TRAINING & EVALUATION ---------------------------------------------------------
 
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=10)
@@ -1084,8 +1058,9 @@ def train_knn(
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=5)
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='none', fill_method='mode')
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=True)            
+x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
+train_least_squares(y_train,x_train,x_test,test_ids,save_plots=True)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=True)            
 #threshold: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229       
 #threshold: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
                     #std (threshold=3), mode: F1: 0.4305
