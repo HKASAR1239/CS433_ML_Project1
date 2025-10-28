@@ -4,9 +4,11 @@ import numpy as np
 
 # ---------- helpers (MSE) ----------
 
+
 def _as_1d(a) -> np.ndarray:
     """Return a as a contiguous 1-D float64 array."""
     return np.asarray(a, dtype=np.float64).ravel()
+
 
 def _mse_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     """
@@ -16,9 +18,6 @@ def _mse_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     e = y - tx @ w
     return 0.5 * np.mean(e * e)
 
-def _rmse_loss(y: np.ndarray,tx: np.ndarray, w:np.ndarray) -> float:
-    """RMSE error"""
-    return np.sqrt(2 * _mse_loss(y,tx,w))
 
 def _mse_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
     """
@@ -43,6 +42,7 @@ def _sigmoid(z: np.ndarray) -> np.ndarray:
     out[neg] = ez / (1.0 + ez)
     return out
 
+
 def _logistic_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     """
     Average negative log-likelihood for labels y ∈ {0,1}:
@@ -51,6 +51,7 @@ def _logistic_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     """
     z = tx @ w
     return np.mean(np.logaddexp(0.0, z) - y * z)
+
 
 def _logistic_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
     """
@@ -65,7 +66,10 @@ def _logistic_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
 #                       STEP 1 : ML METHODS
 # ===========================================================
 
-def mean_squared_error_gd(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float):
+
+def mean_squared_error_gd(
+    y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float
+):
     """
     Linear regression using gradient descent on MSE.
 
@@ -83,7 +87,9 @@ def mean_squared_error_gd(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, 
     return w, _mse_loss(y, tx, w)
 
 
-def mean_squared_error_sgd(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float):
+def mean_squared_error_sgd(
+    y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float
+):
     """
     Linear regression using stochastic gradient descent.
 
@@ -99,14 +105,14 @@ def mean_squared_error_sgd(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray,
     tx = np.asarray(tx, dtype=np.float64)
     w = _as_1d(initial_w).copy()
 
-    #n = y.size
+    # n = y.size
     n = tx.shape[0]
     for _ in range(int(max_iters)):
         i = int(rng.integers(0, n))
-        xi = tx[i]            # shape (D,)
+        xi = tx[i]  # shape (D,)
         yi = y[i]
         err = yi - xi @ w
-        grad_i = -err * xi    # per-sample gradient of 0.5*(err^2)
+        grad_i = -err * xi  # per-sample gradient of 0.5*(err^2)
         w -= gamma * grad_i
 
     return w, _mse_loss(y, tx, w)
@@ -153,9 +159,12 @@ def ridge_regression(y: np.ndarray, tx: np.ndarray, lambda_: float):
     A = tx.T @ tx + (2.0 * n * lambda_) * np.eye(d, dtype=np.float64)
     b = tx.T @ y
     w = np.linalg.solve(A, b)
-    return w, _rmse_loss(y, tx, w)
+    return w, _mse_loss(y, tx, w)
 
-def logistic_regression(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float):
+
+def logistic_regression(
+    y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float
+):
     """
     Logistic regression (y ∈ {0,1}) using gradient descent on the average NLL.
 
@@ -172,8 +181,15 @@ def logistic_regression(y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, ma
 
     return w, _logistic_loss(y, tx, w)
 
-def reg_logistic_regression(y: np.ndarray, tx: np.ndarray, lambda_: float, initial_w: np.ndarray, max_iters: int
-                            ,gamma: float):
+
+def reg_logistic_regression(
+    y: np.ndarray,
+    tx: np.ndarray,
+    lambda_: float,
+    initial_w: np.ndarray,
+    max_iters: int,
+    gamma: float,
+):
     """
     Regularized logistic regression with L2 penalty λ||w||^2.
 
@@ -184,18 +200,12 @@ def reg_logistic_regression(y: np.ndarray, tx: np.ndarray, lambda_: float, initi
     Returns:
         (w, loss) where loss is the final average NLL.
     """
-    N = tx.shape[0]
-    y = np.ravel(y)  # replaces _as_1d
-    w = initial_w.copy()
-    #y = _as_1d(y)
+    y = _as_1d(y)
     tx = np.asarray(tx, dtype=np.float64)
-    #w = _as_1d(initial_w).copy()
+    w = _as_1d(initial_w).copy()
 
     for _ in range(int(max_iters)):
-        #grad = _logistic_grad(y, tx, w) + 2.0 * lambda_ * w
-        grad = _logistic_grad(y, tx, w)
-        #  scale the regularization with N
-        grad[1:] += 2 * lambda_ * w[1:] / N  # do not apply the regularization to the bias, it does not control the model's complexity.
+        grad = _logistic_grad(y, tx, w) + 2.0 * lambda_ * w
         w -= gamma * grad
 
     return w, _logistic_loss(y, tx, w)
