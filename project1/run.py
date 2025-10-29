@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Parameters
+# Parameters for data preparation and model training for the final submission
 THRESHOLD_FEATURES = 0.8  
 THRESHOLD_POINTS = 0.6   
 NORMALIZE = True          
@@ -21,107 +21,7 @@ LAMBDA = 0.001
 # Training F1 score: 0.413
 
 # ----------------------------------- DATA PROCESSING -----------------------------------------------------------
-
-def prepare_data(threshold_features = 0.8,threshold_points = 0.6, normalize = True, remove_outliers = False, aberrant_threshold = 10.0):
-    """
-        Load the raw training and test data, preprocess it, and return cleaned datasets 
-        ready for machine learning models. Handles missing values, feature removal, 
-        normalization, and optional outlier removal.
-
-    INPUTS :
-        - threshold_features (float): Maximum allowed fraction of missing values per feature.
-        - threshold_points (float): Maximum allowed fraction of missing values per data point (row).
-        - normalize (bool): If True, normalize feature values.
-        - remove_outliers (bool): If True, removes outlier data points from the training set.
-    OUTPUTS:
-        - x_train (numpy.ndarray): Preprocessed training features, ready for model input.
-        - y_train (numpy.ndarray): Corresponding labels for x_train, aligned after removal of invalid data points.
-        - x_test (numpy.ndarray): Preprocessed test features, aligned with the training features (same columns).
-    """
-    dir_path = os.path.dirname(os.path.realpath(__file__)) + '/data/dataset/'
-    
-    # Load Data
-    print("Loading data...")
-    x_train_raw, x_test_raw, y_train_raw, train_ids, test_ids = hl.load_csv_data(dir_path)
-    print(f"Raw training data shape: {x_train_raw.shape}")
-    print(f"Raw test data shape: {x_test_raw.shape}")
-    print(f"Raw labels shape: {y_train_raw.shape}")
-
-    #Preprocessing Data
-    print("\nPreprocessing training data...")
-    x_train, removed_features, removed_points = de.fill_data(
-    x_train_raw,
-    remove_features=[],
-    remove_points=[],
-    threshold=True,
-    threshold_features=threshold_features,
-    threshold_points=threshold_points,
-    normalize=normalize,
-    remove_outliers=remove_outliers)
-
-    # Prints some info
-    print(f"Removed {len(removed_features)} features with >{THRESHOLD_FEATURES*100}% missing data")
-    print(f"Removed {len(removed_points)} data points with >{THRESHOLD_POINTS*100}% missing data")
-    print(f"Processed training data shape: {x_train.shape}")
-
-    # Remove corresponding labels for removed datapoints
-    y_train = np.delete(y_train_raw, removed_points, axis=0)
-    print(f"Processed labels shape: {y_train.shape}")
-
-    #Repeat operation for x_test
-    print("\nPreprocessing test data...")
-    x_test, _, _ = de.fill_data(
-    x_test_raw,
-    remove_features=removed_features,
-    remove_points=[], 
-    threshold=False,   
-    threshold_features=threshold_features,
-    threshold_points=threshold_points,
-    normalize=normalize,
-    remove_outliers=remove_outliers) 
-    print(f"Processed test data shape: {x_test.shape}")
-
-    if normalize:
-        print("\nApplying consistent normalization...")
-        
-        # Identify categorical vs continuous features
-        categorical_mask = de.identify_categorical_features(x_train)
-        continuous_mask = ~categorical_mask
-        
-        print(f"Found {categorical_mask.sum()} categorical features")
-        print(f"Found {continuous_mask.sum()} continuous features")
-        
-        # Normalize only continuous features
-        if continuous_mask.sum() > 0:
-            train_mean = x_train[:, continuous_mask].mean(axis=0)
-            train_std = x_train[:, continuous_mask].std(axis=0)
-            
-            # Avoid division by zero
-            train_std[train_std == 0] = 1.0
-            
-            # Apply SAME transformation to both
-            x_train[:, continuous_mask] = (x_train[:, continuous_mask] - train_mean) / train_std
-            x_test[:, continuous_mask] = (x_test[:, continuous_mask] - train_mean) / train_std
-
-    # Set the aberrant values to zero after normalization (aberant values: more than 10 std from mean)
-    aberrant_values = []
-    for column in range(x_train.shape[1]):
-        col_mean = x_train[:, column].mean()
-        col_std = x_train[:, column].std()
-        aberrant_mask_train = np.abs(x_train[:, column] - col_mean) > aberrant_threshold * col_std
-        aberrant_mask_test = np.abs(x_test[:, column] - col_mean) > aberrant_threshold * col_std
-        x_train[aberrant_mask_train, column] = 0.0
-        x_test[aberrant_mask_test, column] = 0.0
-        aberrant_values.append(np.sum(aberrant_mask_train))
-            
-    #print("\nAberrant values per feature (set to 0):")
-    #for idx, count in enumerate(aberrant_values):
-    #    if count > 0:
-    #        print(f" Feature {idx}: {count} aberrant values")        
-
-    return x_train,y_train,x_test,train_ids, test_ids
-
-def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart', fill_method='median'):
+def prepare_data(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart', fill_method='median'):
     """
     Load raw training and test data, preprocess it, and return cleaned datasets
     ready for ML models. Handles missing values, feature removal, outlier removal,
@@ -156,7 +56,7 @@ def prepare_data2(threshold_features=0.8, threshold_points=0.6, normalize=True, 
     print(f"RAW labels: {np.unique(y_train_raw)}")
     # Apply robust preprocessing pipeline
     print("\nApplying robust preprocessing pipeline...")
-    x_train, y_train, x_test = de.fill_data_robust3(
+    x_train, y_train, x_test = de.fill_data(
         x_train_raw,
         x_test_raw,
         y_train_raw,
@@ -265,6 +165,7 @@ def train_mean_square_error_gd(
         gammas = np.logspace(-4,-1,10),
         max_iters = 20,
         k_fold = 4,
+        threshold=0.2,
         seed = 42,
         save_plots=False):
     """
@@ -287,7 +188,6 @@ def train_mean_square_error_gd(
              - k_fold : int, optional : Number of folds for cross-validation.
              - seed : int, optional : Random seed for reproducibility.
     """
-    threshold = 0.2
     # Prepare data for logistic regression
     print("\nPreparing data for MSE GD...")
     # Add bias term (column of ones) to features
@@ -366,7 +266,7 @@ def train_mean_square_error_gd(
 
     # Test predictions
     y_test_pred = np.where(x_test_bias @ final_w >= threshold, 1, -1)
-    output_path = "submission.csv"
+    output_path = "submission_MSE-GD.csv"
     hl.create_csv_submission(test_ids, y_test_pred, output_path)
     print(f"Submission saved at: {output_path}")
 
@@ -383,6 +283,7 @@ def train_mean_square_error_sgd(
         gammas = np.logspace(-8,-3,10),
         max_iters = 20000,
         k_fold = 4,
+        threshold=0.2,
         seed = 42,
         save_plots=False):
     """
@@ -406,7 +307,6 @@ def train_mean_square_error_sgd(
              - seed : int, optional : Random seed for reproducibility.
              - save_plots : Boolean, optional : Plot metrics w.r.t gamma hyperparameter and save.
     """
-    threshold = 0.0
     # Prepare data for logistic regression
     print("\nPreparing data for MSE SGD...")
     # Add bias term (column of ones) to features
@@ -484,7 +384,7 @@ def train_mean_square_error_sgd(
 
     # Test predictions
     y_test_pred = np.where(x_test_bias @ final_w >= threshold, 1, -1)
-    output_path = "submission.csv"
+    output_path = "submission_MSE-SGD.csv"
     hl.create_csv_submission(test_ids, y_test_pred, output_path)
     print(f"Submission saved at: {output_path}")
 
@@ -492,6 +392,7 @@ def train_mean_square_error_sgd(
     if save_plots:
         plot_and_save(gammas, mean_f1s,"gamma", "F1", "blue", "MSE_SGD_F1_VS_gamma.png","MSE_SGD",best_gamma)
         plot_and_save(gammas, mean_accs, "gamma","Accuracy", "orange", "MSE_SGD_acc_VS_gamma.png","MSE_SGD",best_gamma)
+    
     
 def train_least_squares(
         y_train,
@@ -573,9 +474,10 @@ def train_least_squares(
     print("Test preds:", y_test_pred_cont.min(), y_test_pred_cont.max(), y_test_pred_cont.mean())
 
     # Save submission
-    output_path = "submission.csv"
+    output_path = "submission_least-squares.csv"
     hl.create_csv_submission(test_ids, y_test_pred, output_path)
     print(f"Submission file saved to: {output_path}")
+
 
 def train_reg_logistic_regression(
         y_train,
@@ -611,7 +513,6 @@ def train_reg_logistic_regression(
              - seed : int, optional : Random seed for reproducibility.
              - save_plots : Boolean, optional : Plot metrics w.r.t gamma hyperparameter and save.
     """
-    #threshold = 0.05
     # Prepare data for logistic regression
     print("\nPreparing data for logistic regression...")
     # Convert labels from {-1, 1} to {0, 1} for logistic regression
@@ -701,7 +602,7 @@ def train_reg_logistic_regression(
 
 
     path = os.path.dirname(os.path.realpath(__file__))
-    output_path = path + "/submission_v8.csv"
+    output_path = path + "/submission_reg-logistic-regression.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
     # ---- Plot F1 scores only ----
@@ -740,6 +641,7 @@ def train_reg_logistic_regression(
         print("Saved plot: reg_logistic_prediction_distribution.png")
         plt.close()
 
+
 def train_logistic_regression(
         y_train,
         x_train,
@@ -748,6 +650,7 @@ def train_logistic_regression(
         gammas = [0.1],
         max_iters=2000,                                  
         k_fold=4,
+        threshold=0.2,
         seed=42,
         save_plots=False):
     """
@@ -770,7 +673,6 @@ def train_logistic_regression(
              - k_fold : int, optional : Number of folds for cross-validation.
              - seed : int, optional : Random seed for reproducibility.
     """
-    threshold = 0.2
     # Prepare data for logistic regression
     print("\nPreparing data for logistic regression...")
     # Convert labels from {-1, 1} to {0, 1} for logistic regression
@@ -813,7 +715,8 @@ def train_logistic_regression(
                 gamma=gamma
             )
 
-            f1 = compute_f1_score(y_val, X_val, w, threshold)
+            f1, _, _, _ = compute_f1_score(y_val, X_val, w, threshold)
+            print(f1)
             fold_f1s.append(f1)
 
         mean_f1 = np.mean(fold_f1s)
@@ -837,12 +740,13 @@ def train_logistic_regression(
     y_test_prob = impl._sigmoid(x_test_bias @ final_w)
     y_test_binary = (y_test_prob >= threshold).astype(int)
     y_test = 2 * y_test_binary - 1
-    hl.create_csv_submission(test_ids, y_test, "submission.csv")
+    hl.create_csv_submission(test_ids, y_test, "submission-logistic-regression.csv")
     print("Submission file saved.")
 
     # ---- Plot F1 vs gamma ----
     if save_plots:
         plot_and_save(gammas, f1_per_gamma,"gamma", "F1", "blue", "Log_Reg_F1_VS_gamma.png","Log_Reg",best_gamma)
+
 
 def train_ridge_regression(
         y_train,
@@ -851,6 +755,7 @@ def train_ridge_regression(
         test_ids,
         lambdas = np.logspace(-5, -1, 4),                                
         k_fold=4,
+        threshold=0.2,
         seed=42,
         save_plots=False):
     """
@@ -872,7 +777,6 @@ def train_ridge_regression(
             - k_fold : int, optional : Number of folds for cross-validation.
             - seed : int, optional : Random seed for reproducibility.
     """
-    threshold = 0.2
     # Prepare data for logistic regression
     print("\nPreparing data for logistic regression...")
     # Add bias term (column of ones) to features
@@ -923,7 +827,7 @@ def train_ridge_regression(
 
     # Predictions
     y_test_pred = np.where(x_test_bias @ final_w >= threshold, 1, -1)
-    hl.create_csv_submission(test_ids, y_test_pred, "submission.csv")
+    hl.create_csv_submission(test_ids, y_test_pred, "submission_ridge-regression.csv")
     print("Submission file saved.")
 
     # ---- Plot loss vs lambda ----
@@ -931,15 +835,9 @@ def train_ridge_regression(
         plot_and_save(lambdas, mean_f1s,"lambda", "F1", "blue", "Ridge_Reg_F1_VS_lambda.png","Ridge_Reg",best_lambda)
         plot_and_save(lambdas,mean_losses,"lambda","Loss","orange","Ridge_Reg_Loss_VS_lambda.png","Ridge_Reg",best_lambda)
 
-
-
-
-
-
-
     # Final prediction by majority vote
-    y_pred = np.where(y_pred >= 0, 1, -1)
-    return y_pred
+    #y_pred = np.where(y_pred >= 0, 1, -1)
+    #return y_pred
 
 def knn_predict(x_train, y_train, x_test, k=3, factor=1):
     """
@@ -1052,14 +950,15 @@ def train_knn(
 
 # ----------------------------------- TRAINING & EVALUATION ---------------------------------------------------------
 
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
 
-#x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=10)
-#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4)                            #F1 : 0.422
+# train_mean_square_error_gd(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=np.logspace(-3,0.1,3),k_fold=4,threshold=0.2,save_plots=True)
+# train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=np.logspace(-4,-1,10),k_fold=4,threshold=0.2,save_plots=True)
+# train_least_squares(y_train,x_train,x_test,test_ids, save_plots=True)
+train_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=[0.02, 0.05, 0.08], k_fold=4,threshold=0.2, save_plots=True)
+# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-5, 1e-4],gammas=[0.1, 0.05, 0.01], threshold=0.2, k_fold=4, save_plots=True)
+# train_ridge_regression(y_train,x_train,x_test,test_ids,lambdas=[1e-5, 1e-4, 1e-3, 1e-2], k_fold=4, threshold=0.2, save_plots=True)
 
-#x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=5)
-
-x_train,y_train,x_test,train_ids, test_ids = prepare_data2(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
-train_least_squares(y_train,x_train,x_test,test_ids,save_plots=True)
 #train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=True)            
 #threshold: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229       
 #threshold: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
@@ -1069,3 +968,5 @@ train_least_squares(y_train,x_train,x_test,test_ids,save_plots=True)
 
 #x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=1000)
 #train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4)                            #F1 : 0.413
+
+
