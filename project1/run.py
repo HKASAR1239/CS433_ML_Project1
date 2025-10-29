@@ -3,11 +3,8 @@ import os
 import helpers as hl
 import implementations as impl
 import data_exploration as de
-import torch
 import matplotlib.pyplot as plt
 
-device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-print(f"Using device: {device}")
 
 # Parameters
 THRESHOLD_FEATURES = 0.8
@@ -17,11 +14,8 @@ REMOVE_OUTLIERS = False
 MAX_ITERS = 5000
 GAMMA = 0.1
 LAMBDA = 0.001
-# best gamma / best lambda : 0.1 0.0001
-# Training F1 score: 0.413
 
 # ----------------------------------- DATA PROCESSING -----------------------------------------------------------
-
 
 def prepare_data(
     threshold_features=0.8,
