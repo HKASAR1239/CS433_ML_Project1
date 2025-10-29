@@ -233,7 +233,6 @@ Set `seed=42` in cross-validation functions for reproducible splits.
 With default settings:
 - **Training F1 Score**: ~0.41-0.43
 - **Cross-Validation F1**: ~0.42-0.43
-- **Processing Time**: ~1-5 minutes (depending on method)
 
 ### Data Requirements
 Place these files in `data/dataset/`:
