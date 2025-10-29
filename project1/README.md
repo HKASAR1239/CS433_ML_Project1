@@ -10,7 +10,6 @@ Machine Learning course project (EPFL CS-433, Fall 2025) - Binary classification
 - [Quick Setup](#quick-setup)
 - [Project Overview](#project-overview)
 - [Project Structure](#project-structure)
-- [Data Exploration](#data-exploration)
 - [Methods Implemented](#methods-implemented)
 - [Results Summary](#results-summary)
 - [Usage](#usage)
