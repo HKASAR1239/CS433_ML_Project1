@@ -299,9 +299,11 @@ def plot_and_save(x, y, xlabel, ylabel, color, filename, model_name, best_param)
     full_path = os.path.join(dir_path, filename)
     plt.figure(figsize=(7, 5))
     plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-    plt.axvline(best_param, color="r", linestyle="--", label=f"Best {xlabel}")
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    plt.axvline(best_param, color="r", linestyle="--", label=f"Best {xlabel} : {best_param:.3f}")
+    plt.xlabel(xlabel,fontsize = 19)
+    plt.ylabel(ylabel,fontsize=19)
+    plt.xticks(fontsize=16) 
+    plt.yticks(fontsize=16)  
     plt.title(f"{model_name}: {ylabel} vs {xlabel}")
     plt.legend()
     plt.grid(True)
@@ -318,8 +320,8 @@ def train_mean_square_error_gd(
     x_train,
     x_test,
     test_ids,
-    gammas=np.logspace(-4, -1, 10),
-    max_iters=20,
+    gammas=np.logspace(-8, -1, 10),
+    max_iters=20000,
     k_fold=4,
     seed=42,
     save_plots=False,
@@ -436,21 +438,21 @@ def train_mean_square_error_gd(
         plot_and_save(
             gammas,
             mean_f1s,
-            "gamma",
+            "Gamma",
             "F1",
             "blue",
             "MSE_GD_F1_VS_gamma.png",
-            "MSE_GD",
+            "MSE Gradient Descent",
             best_gamma,
         )
         plot_and_save(
             gammas,
             mean_accs,
-            "gamma",
+            "Gamma",
             "Accuracy",
             "orange",
             "MSE_GD_acc_VS_gamma.png",
-            "MSE_GD",
+            "MSE Gradient Descent",
             best_gamma,
         )
 
@@ -460,7 +462,7 @@ def train_mean_square_error_sgd(
     x_train,
     x_test,
     test_ids,
-    gammas=np.logspace(-8, -3, 10),
+    gammas=np.logspace(-8, -1, 10),
     max_iters=20000,
     k_fold=4,
     seed=42,
@@ -578,21 +580,21 @@ def train_mean_square_error_sgd(
         plot_and_save(
             gammas,
             mean_f1s,
-            "gamma",
+            "Gamma",
             "F1",
             "blue",
             "MSE_SGD_F1_VS_gamma.png",
-            "MSE_SGD",
+            "MSE SGD",
             best_gamma,
         )
         plot_and_save(
             gammas,
             mean_accs,
-            "gamma",
+            "Gamma",
             "Accuracy",
             "orange",
             "MSE_SGD_acc_VS_gamma.png",
-            "MSE_SGD",
+            "MSE SGD",
             best_gamma,
         )
 
@@ -655,21 +657,21 @@ def train_least_squares(y_train, x_train, x_test, test_ids, save_plots=False):
         plot_and_save(
             thresholds,
             f1s,
-            "threshold",
+            "Threshold",
             "F1",
             "blue",
             "least_squares_F1_VS_threshold.png",
-            "Least_squares",
+            "Least squares",
             best_threshold,
         )
         plot_and_save(
             thresholds,
             accs,
-            "threshold",
+            "Threshold",
             "Accuracy",
             "orange",
             "least_squares_Accuracy_VS_threshold.png",
-            "Least_squares",
+            "Least squares",
             best_threshold,
         )
     # plot_and_save(thresholds, mean_losses, "Loss", "green", "least_squares_Loss_VS_threshold.png","Least_squares")
@@ -1002,7 +1004,7 @@ def train_logistic_regression(
         plot_and_save(
             gammas,
             f1_per_gamma,
-            "gamma",
+            "Gamma",
             "F1",
             "blue",
             "Log_Reg_F1_VS_gamma.png",
@@ -1103,7 +1105,7 @@ def train_ridge_regression(
         plot_and_save(
             lambdas,
             mean_f1s,
-            "lambda",
+            "Lambda",
             "F1",
             "blue",
             "Ridge_Reg_F1_VS_lambda.png",
@@ -1113,7 +1115,7 @@ def train_ridge_regression(
         plot_and_save(
             lambdas,
             mean_losses,
-            "lambda",
+            "Lambda",
             "Loss",
             "orange",
             "Ridge_Reg_Loss_VS_lambda.png",
@@ -1252,7 +1254,7 @@ x_train, y_train, x_test, train_ids, test_ids = prepare_data2(
     outlier_strategy="smart",
     fill_method="mode",
 )
-train_least_squares(y_train, x_train, x_test, test_ids, save_plots=True)
+#train_least_squares(y_train, x_train, x_test, test_ids, save_plots=True)
 # train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=True)
 # threshold: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229
 # threshold: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
@@ -1262,3 +1264,6 @@ train_least_squares(y_train, x_train, x_test, test_ids, save_plots=True)
 
 # x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=1000)
 # train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4)                            #F1 : 0.413
+
+train_mean_square_error_gd(y_train,x_train,x_test,test_ids,gammas=np.logspace(-8,-3,10),max_iters=1000,save_plots=True)
+#train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,save_plots=True)

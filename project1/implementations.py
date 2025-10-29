@@ -18,7 +18,6 @@ def _mse_loss(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> float:
     e = y - tx @ w
     return 0.5 * np.mean(e * e)
 
-
 def _mse_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
     """
     Gradient of the average MSE:
@@ -66,7 +65,6 @@ def _logistic_grad(y: np.ndarray, tx: np.ndarray, w: np.ndarray) -> np.ndarray:
 #                       STEP 1 : ML METHODS
 # ===========================================================
 
-
 def mean_squared_error_gd(
     y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float
 ):
@@ -85,7 +83,6 @@ def mean_squared_error_gd(
         w -= gamma * grad
 
     return w, _mse_loss(y, tx, w)
-
 
 def mean_squared_error_sgd(
     y: np.ndarray, tx: np.ndarray, initial_w: np.ndarray, max_iters: int, gamma: float
