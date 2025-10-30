@@ -74,15 +74,15 @@ This project implements binary classification to predict cardiovascular disease 
 │   ├── test_project1_public.py     
 │   ├── conftest.py                 
 │   ├── environment.yml             
-│   └── INSTRUCTIONS.md             
-│
+│   └── INSTRUCTIONS.md
+├── submission_files/               # Intermediate submission files (not tracked, generated when running)      
 └── ML_Project_1_AUGAXIA/           # Report materials (LaTeX source, figures)
     ├── references.bib              # Bibliography for report
     ├── Log_Reg_F1_VS_gamma.png     # Figures for report
     └── untitled folder/
         └── latex-template.tex      # LaTeX report source
-```
 
+```
 ---
 
 ## Methods Implemented

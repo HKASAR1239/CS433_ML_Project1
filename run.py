@@ -49,7 +49,6 @@ def prepare_data(threshold_features=0.8, threshold_points=0.6, normalize=True, o
         f"Raw train shape: {x_train_raw.shape}, test shape: {x_test_raw.shape}, labels shape: {y_train_raw.shape}"
     )
 
-    # Add this at the start of prepare_data2
     print(f"RAW data - Train min: {x_train_raw.min()}, max: {x_train_raw.max()}")
     print(f"RAW data - Unique values sample: {np.unique(x_train_raw[:, 0])[:10]}")
     print(f"RAW labels: {np.unique(y_train_raw)}")
@@ -161,6 +160,7 @@ def compute_f1_score_KNN(y_true, y_pred):
 # ----------------------------------- HELPERS FOR PLOTING RESULTS ---------------------------------------------------
 def plot_and_save(x, y, xlabel, ylabel, color, filename, model_name, best_param):
     dir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "plots")
+    os.makedirs(dir_path, exist_ok=True)  
     full_path = os.path.join(dir_path, filename)
     plt.figure(figsize=(7, 5))
     plt.plot(x, y, label=ylabel, linewidth=2, color=color)
@@ -567,6 +567,7 @@ def train_least_squares(y_train, x_train, x_test, test_ids, save_plots=False):
 
     # Save submission
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+    os.makedirs(path, exist_ok=True)  
     output_path = path + "/least_squares_T1.csv"
     hl.create_csv_submission(test_ids, y_test_pred, output_path)
     print("Submission file saved.")
@@ -706,6 +707,7 @@ def train_reg_logistic_regression(
     y_test = 2 * y_test_binary - 1
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+    os.makedirs(path, exist_ok=True)  
     output_path = path + "/reg-logistic-regression_T1.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
@@ -858,6 +860,7 @@ def train_logistic_regression(
 
     # Save submission file
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+    os.makedirs(path, exist_ok=True)  
     output_path = path + "/logistic-regression_T1.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
@@ -1090,6 +1093,7 @@ def train_knn(
 
         # Create and save submission file
         path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+        os.makedirs(path, exist_ok=True)  
         output_path = path + "/knn_T1.csv"
         hl.create_csv_submission(test_ids, y_test_pred, output_path)
         print("Submission file saved at:", output_path)
