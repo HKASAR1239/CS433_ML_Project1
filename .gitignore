@@ -24,3 +24,12 @@ Thumbs.db
 
 # Old submissions
 submission_v*.csv
+
+# Temporary lock files
+*.odt#
+*~lock.*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
