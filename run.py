@@ -49,6 +49,7 @@ def prepare_data(threshold_features=0.8, threshold_points=0.6, normalize=True, o
         f"Raw train shape: {x_train_raw.shape}, test shape: {x_test_raw.shape}, labels shape: {y_train_raw.shape}"
     )
 
+    # Add this at the start of prepare_data2
     print(f"RAW data - Train min: {x_train_raw.min()}, max: {x_train_raw.max()}")
     print(f"RAW data - Unique values sample: {np.unique(x_train_raw[:, 0])[:10]}")
     print(f"RAW labels: {np.unique(y_train_raw)}")
@@ -860,7 +861,7 @@ def train_logistic_regression(
 
     # Save submission file
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
-    os.makedirs(path, exist_ok=True)  
+    os.makedirs(path, exist_ok=True) 
     output_path = path + "/logistic-regression_T1.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")

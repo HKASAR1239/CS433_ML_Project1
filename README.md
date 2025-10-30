@@ -4,18 +4,19 @@ Machine Learning course project (EPFL CS-433, Fall 2025) - Binary classification
 
 **Team:** Gabriel Taieb, Aurel Bizeau & Alexia Möller
 
----
+-----
 
 ## Table of Contents
-- [Quick Setup](#quick-setup)
-- [Project Overview](#project-overview)
-- [Project Structure](#project-structure)
-- [Methods Implemented](#methods-implemented)
-- [Results Summary](#results-summary)
-- [Usage](#usage)
-- [Reproducibility](#reproducibility)
 
----
+  - [Quick Setup](#quick-setup)
+  - [Project Overview](#project-overview)
+  - [Project Structure](#project-structure)
+  - [Methods Implemented](#methods-implemented)
+  - [Results Summary](#results-summary)
+  - [Usage](#usage)
+  - [Reproducibility](#reproducibility)
+
+-----
 
 ## Quick Setup
 
@@ -25,23 +26,25 @@ source venv_project1/bin/activate
 pip install -r requirements.txt
 ```
 
----
+-----
 
 ## Project Overview
 
-This project implements binary classification to predict cardiovascular disease risk from the Behavioral Risk Factor Surveillance System (BRFSS) dataset containing health-related data from 300,000+ individuals.
+This project implements binary classification to predict cardiovascular disease risk from the Behavioral Risk Factor Surveillance System (BRFSS) dataset containing health-related data from **more than 400,000 individuals**.
 
 **Goal:** Predict whether a person is at risk of developing coronary heart disease (MICHD) based on lifestyle and clinical features.
 
-**Approach:** 
-- Comprehensive data preprocessing pipeline
-- Implementation of 6 ML methods from scratch (no external ML libraries)
-- Extensive hyperparameter tuning with cross-validation
-- Comparative analysis of multiple algorithms
+**Approach:**
 
----
+  * Comprehensive data preprocessing pipeline (Best: 0.8 feature threshold, "smart" IQR outlier removal, and mode imputation).
+  * Implementation of 6 ML methods from scratch (no external ML libraries).
+  * Extensive hyperparameter tuning with cross-validation.
+  * Comparative analysis of multiple algorithms.
+
+-----
 
 ## Project Structure
+
 ```
 .
 ├── run.py                          # Main script: trains model & generates predictions
@@ -83,7 +86,8 @@ This project implements binary classification to predict cardiovascular disease 
         └── latex-template.tex      # LaTeX report source
 
 ```
----
+
+-----
 
 ## Methods Implemented
 
@@ -99,64 +103,35 @@ All methods implemented in `implementations.py`:
 | **Regularized Logistic Regression** | `reg_logistic_regression` | Logistic regression with L2 penalty |
 
 ### Additional Methods Explored
-- **K-Nearest Neighbors (KNN)**: Custom implementation with weighted voting
----
+
+  - **K-Nearest Neighbors (KNN)**: Custom implementation with weighted voting
+
+-----
 
 ## Results Summary
 
-### Performance Comparison (Cross-Validation F1 Scores)
+### Performance Comparison (Final Validation F1 Scores)
 
-| Method | Best Hyperparameters | Mean F1 Score | Notes |
-|--------|---------------------|---------------|-------|
-| **Regularized Logistic Regression** | λ=1e-6, γ=0.1, threshold=0.2 | **~0.43** | Best performing method |
-| **Least Squares** | threshold=-0.5 | ~0.42 | Good baseline |
-| **Ridge Regression** | λ=0.0001, γ=0.1 | ~0.41 | Regularization helped |
-| **Logistic Regression** | γ=0.01 | ~0.31 | Needed regularization |
-| **MSE SGD** | γ=0.0002 | ~0.22 | High variance |
-| **MSE GD** | γ=0.01 | ~0.30 | Slower convergence |
-| **KNN** | k=30, factor=9 | ~0.35-0.42 | Computationally expensive |
+This table reflects the final model performance based on 4-fold cross-validation or AICrowd validation scores, as reported in the project paper.
 
-### Experiment Visualizations
-
-All plots are stored in the `plots/` directory:
-
-1. **Regularized Logistic Regression** (`Log_Reg_F1_VS_gamma.png`)
-   - F1 score plateaus at γ ≈ 0.1
-   - Optimal performance: F1 ≈ 0.89 (note: this may be on training set)
-
-2. **Least Squares Threshold Tuning**
-   - `least_squares_Accuracy_VS_threshold.png`: Accuracy peaks at threshold ≈ -0.5
-   - `least_squares_F1_VS_threshold.png`: F1 score maximized at threshold ≈ -0.5
-
-3. **MSE with Gradient Descent**
-   - `MSE_GD_F1_VS_gamma.png`: F1 increases monotonically with γ
-   - `MSE_GD_acc_VS_gamma.png`: Accuracy follows similar trend
-   - Best γ ≈ 0.01 (marked with red line)
-
-4. **MSE with SGD**
-   - `MSE_SGD_F1_VS_gamma.png`: Sharp peak at γ ≈ 0.0002
-   - `MSE_SGD_acc_VS_gamma.png`: Accuracy drops sharply outside optimal range
-   - SGD highly sensitive to learning rate
-
-5. **KNN Hyperparameter Grid Search**
-   - `KNN_F1_Scores.png`: 2D heatmap of F1 scores vs. (k, weighting factor)
-   - `KNN_F1_Scores_CV1.png`: Single best configuration, k=30, factor=9
-   - Higher weighting factors for positive class improved F1
-
-6. **Prediction Distribution** (`Pred_distr.png`)
-   - Shows distribution of predicted probabilities on train/test
-   - Threshold at 0.2 separates classes
+| Method | Best Hyperparameters | Validation F1 Score | Train F1 Score |
+| :--- | :--- | :--- | :--- |
+| **Logistic Regression** | $\gamma=0.08$ | **\~0.438** | 0.4259 |
+| **Regularized Logistic Regression** | $\lambda=10^{-6}$, $\gamma=0.1$ | **\~0.437** | 0.4291 |
+| **KNN** | $k=30$, factor=9 | \~0.318 | 0.3258 |
+| **Least Squares (LSE)** | N/A | \~0.16 | 0.4220 |
+| **MSE SGD** | $\gamma=0.0046$ | \~0.137 | 0.1426 |
+| **Ridge Regression** | $\lambda=10^{-5}$ | \~0.033 | 0.0275 |
+| **MSE GD** | $\gamma=0.01$ | \~0.0095 | 0.0101 |
 
 ### Key Findings
 
-1. **Regularized Logistic Regression** performed best with proper tuning
-2. **Feature thresholding** at 0.8 and **mode imputation** were optimal
-3. **Cross-validation** (k=4 folds) prevented overfitting
-4. **Threshold tuning** crucial for binary classification (optimal ≈ 0.2-0.5)
-5. **Learning rate** critically important for gradient-based methods
-6. **KNN** competitive but computationally prohibitive for large datasets
+1.  **Model-task alignment is crucial**: Probabilistic classifiers (Logistic Regression) vastly outperformed MSE-based linear models, which failed to handle the severe class imbalance.
+2.  **Preprocessing is critical**: The best strategy (smart IQR outlier removal, mode imputation) achieved an F1 score of 0.437, a significant improvement over baseline preprocessing (0.421 F1).
+3.  **Best Model**: **Regularized Logistic Regression** (and standard Logistic Regression) provided the best and most stable results for this classification task.
+4.  **Overfitting**: The optimal regularization $\lambda$ was minimal ($10^{-6}$), suggesting the model was not severely overfitting with proper preprocessing.
 
----
+-----
 
 ## Usage
 
@@ -169,41 +144,45 @@ python run.py
 ```
 
 This will:
-1. Load training and test data from `data/dataset/`
-2. Apply preprocessing pipeline
-3. Train the model (currently: least squares or regularized logistic regression)
-4. Generate `submission.csv` for AIcrowd submission
+
+1.  Load training and test data from `data/dataset/`
+2.  Apply preprocessing pipeline
+3.  Train the model (default: Regularized Logistic Regression)
+4.  Generate `submission.csv` for AIcrowd submission
 
 ### Key Configuration Parameters
 
-Edit these parameters in `run.py` (lines 13-19):
+Edit these parameters in `run.py` (lines 13-19). The defaults below are set to the best-performing configuration from the report.
 
 ```python
 THRESHOLD_FEATURES = 0.8    # Remove features with >80% missing data
 THRESHOLD_POINTS = 0.6      # Remove samples with >60% missing features
 NORMALIZE = True            # Apply z-score normalization
-REMOVE_OUTLIERS = False     # Enable/disable outlier removal
+REMOVE_OUTLIERS = True      # Enable outlier removal (using 'smart' strategy)
 MAX_ITERS = 5000           # Iterations for iterative methods
-GAMMA = 0.1                # Learning rate
-LAMBDA = 0.001             # Regularization strength
+GAMMA = 0.1                # Optimal learning rate for Reg. Logistic
+LAMBDA = 1e-6              # Optimal regularization strength for Reg. Logistic
 ```
 
 ### Switching Between Methods
 
-In `run.py` (line 1255), uncomment your desired method:
+In `run.py` (line 1255), uncomment your desired method. The default should be set to the best-performing model (Regularized Logistic Regression).
 
 ```python
-# Least Squares (current default)
-train_least_squares(y_train, x_train, x_test, test_ids, save_plots=True)
+# Best Model: Regularized Logistic Regression
+# This model achieved the highest stable validation F1 score (0.437).
+train_reg_logistic_regression(
+    y_train, x_train, x_test, test_ids,
+    max_iters=5000, lambdas=[1e-6], gammas=[0.1], 
+    threshold=0.2, k_fold=4, save_plots=True
+)
 
-# Or use Regularized Logistic Regression
-# train_reg_logistic_regression(
-#     y_train, x_train, x_test, test_ids,
-#     max_iters=5000, lambdas=[1e-6], gammas=[0.1], 
-#     threshold=0.2, k_fold=4, save_plots=True
-# )
+# --- Other Methods ---
 
-# Or use KNN
+# Least Squares (Poor performance: 0.16 F1)
+# train_least_squares(y_train, x_train, x_test, test_ids, save_plots=True)
+
+# Or use KNN (Moderate performance: 0.318 F1)
 # train_knn(y_train, x_train, x_test, test_ids, 
 #           ks=[30], factors=[9], k_fold=4)
 ```
@@ -213,6 +192,7 @@ train_least_squares(y_train, x_train, x_test, test_ids, save_plots=True)
 Each training function supports grid search over hyperparameters:
 
 **Example: Tune learning rate and regularization**
+
 ```python
 train_reg_logistic_regression(
     y_train, x_train, x_test, test_ids,
@@ -228,63 +208,71 @@ train_reg_logistic_regression(
 ### Cross-Validation
 
 All training functions use k-fold cross-validation (default k=4):
-- Splits data into k folds
-- Trains on k-1 folds, validates on remaining fold
-- Reports mean validation F1 score
-- Selects best hyperparameters
-- Retrains on full training set with best parameters
 
----
+  - Splits data into k folds
+  - Trains on k-1 folds, validates on remaining fold
+  - Reports mean validation F1 score
+  - Selects best hyperparameters
+  - Retrains on full training set with best parameters
+
+-----
 
 ## Reproducibility
 
 ### System Requirements
-- Python 3.8+
-- NumPy
-- Matplotlib (for visualization only)
-- Seaborn (for visualization only)
+
+  - Python 3.8+
+  - NumPy
+  - Matplotlib (for visualization only)
+  - Seaborn (for visualization only)
 
 ### Random Seed
+
 Set `seed=42` in cross-validation functions for reproducible splits.
 
 ### Expected Performance
-With default settings:
-- **Training F1 Score**: ~0.41-0.43
-- **Cross-Validation F1**: ~0.42-0.43
+
+With default settings (Regularized Logistic Regression):
+
+  - **Training F1 Score**: \~0.429
+  - **Cross-Validation F1**: \~0.437
 
 ### Data Requirements
+
 Place these files in `data/dataset/`:
-- `x_train.csv`: Training features
-- `y_train.csv`: Training labels (-1, 1)
-- `x_test.csv`: Test features
+
+  - `x_train.csv`: Training features
+  - `y_train.csv`: Training labels (-1, 1)
+  - `x_test.csv`: Test features
 
 ### Output Files
-- `submission.csv`: Predictions in AIcrowd format (Id, Prediction)
-- `plots/*.png`: Visualization outputs (if `save_plots=True`)
 
----
+  - `submission.csv`: Predictions in AIcrowd format (Id, Prediction)
+  - `plots/*.png`: Visualization outputs (if `save_plots=True`)
+
+-----
 
 ## Implementation Notes
 
 ### Design Decisions
 
-1. **No External ML Libraries**: All algorithms implemented from scratch using only NumPy
-2. **Modular Architecture**: Separate files for implementations, preprocessing, and execution
-3. **Extensive Logging**: Progress tracking and performance metrics throughout
-4. **Flexible Pipeline**: Easy to swap preprocessing strategies and models
+1.  **No External ML Libraries**: All algorithms implemented from scratch using only NumPy
+2.  **Modular Architecture**: Separate files for implementations, preprocessing, and execution
+3.  **Extensive Logging**: Progress tracking and performance metrics throughout
+4.  **Flexible Pipeline**: Easy to swap preprocessing strategies and models
 
 ### Performance Optimizations
 
-- Vectorized NumPy operations
-- Efficient normal equation solving with `np.linalg.solve`
-- Smart outlier detection avoiding unnecessary computation
-- Categorical feature detection for selective normalization
+  - Vectorized NumPy operations
+  - Efficient normal equation solving with `np.linalg.solve`
+  - Smart outlier detection avoiding unnecessary computation
+  - Categorical feature detection for selective normalization
 
 ### Challenges Overcome
 
-1. **Extreme Class Imbalance**: Addressed with F1 score optimization and threshold tuning
-2. **High Missing Data Rate**: Multi-stage imputation strategy
-3. **Computational Constraints**: Efficient implementations for large dataset
-4. **Overfitting Risk**: Regularization and cross-validation
+1.  **Extreme Class Imbalance**: Addressed with F1 score optimization and threshold tuning
+2.  **High Missing Data Rate**: Multi-stage imputation strategy
+3.  **Computational Constraints**: Efficient implementations for large dataset
+4.  **Overfitting Risk**: Regularization and cross-validation
 
 **Project Submission Date:** October 31st, 2025
