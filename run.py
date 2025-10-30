@@ -15,8 +15,15 @@ MAX_ITERS = 2000
 GAMMA = 0.1
 LAMBDA = 1e-6
 
+
 # ----------------------------------- DATA PROCESSING -----------------------------------------------------------
-def prepare_data(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart', fill_method='median'):
+def prepare_data(
+    threshold_features=0.8,
+    threshold_points=0.6,
+    normalize=True,
+    outlier_strategy="smart",
+    fill_method="median",
+):
     """
     Load raw training and test data, preprocess it, and return cleaned datasets
     ready for ML models. Handles missing values, feature removal, outlier removal,
@@ -161,15 +168,17 @@ def compute_f1_score_KNN(y_true, y_pred):
 # ----------------------------------- HELPERS FOR PLOTING RESULTS ---------------------------------------------------
 def plot_and_save(x, y, xlabel, ylabel, color, filename, model_name, best_param):
     dir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "plots")
-    os.makedirs(dir_path, exist_ok=True)  
+    os.makedirs(dir_path, exist_ok=True)
     full_path = os.path.join(dir_path, filename)
     plt.figure(figsize=(7, 5))
     plt.plot(x, y, label=ylabel, linewidth=2, color=color)
-    plt.axvline(best_param, color="r", linestyle="--", label=f"Best {xlabel} : {best_param:.3f}")
-    plt.xlabel(xlabel,fontsize = 19)
-    plt.ylabel(ylabel,fontsize=19)
-    plt.xticks(fontsize=16) 
-    plt.yticks(fontsize=16)  
+    plt.axvline(
+        best_param, color="r", linestyle="--", label=f"Best {xlabel} : {best_param:.3f}"
+    )
+    plt.xlabel(xlabel, fontsize=19)
+    plt.ylabel(ylabel, fontsize=19)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
     plt.title(f"{model_name}: {ylabel} vs {xlabel}")
     plt.legend()
     plt.grid(True)
@@ -182,16 +191,17 @@ def plot_and_save(x, y, xlabel, ylabel, color, filename, model_name, best_param)
 
 # ----------------------------------- TRAINING FUNCTIONS  ------------------------------------------------------------
 def train_mean_square_error_gd(
-        y_train,
-        x_train,
-        x_test,
-        test_ids,
-        gammas = np.logspace(-8,-1,10),
-        max_iters = 20000,
-        k_fold = 4,
-        threshold=0.2,
-        seed = 42,
-        save_plots=False):
+    y_train,
+    x_train,
+    x_test,
+    test_ids,
+    gammas=np.logspace(-8, -1, 10),
+    max_iters=20000,
+    k_fold=4,
+    threshold=0.2,
+    seed=42,
+    save_plots=False,
+):
     """
     Train a MSE with gradient descent model with hyperparameter tuning
     using k-fold cross-validation, then generate predictions for the test set.
@@ -323,16 +333,17 @@ def train_mean_square_error_gd(
 
 
 def train_mean_square_error_sgd(
-        y_train,
-        x_train,
-        x_test,
-        test_ids,
-        gammas = np.logspace(-8,-1,10),
-        max_iters = 20000,
-        k_fold = 4,
-        threshold=0.2,
-        seed = 42,
-        save_plots=False):
+    y_train,
+    x_train,
+    x_test,
+    test_ids,
+    gammas=np.logspace(-8, -1, 10),
+    max_iters=20000,
+    k_fold=4,
+    threshold=0.2,
+    seed=42,
+    save_plots=False,
+):
     """
     Train a MSE with gradient descent model with hyperparameter tuning
     using k-fold cross-validation, then generate predictions for the test set.
@@ -568,7 +579,7 @@ def train_least_squares(y_train, x_train, x_test, test_ids, save_plots=False):
 
     # Save submission
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
-    os.makedirs(path, exist_ok=True)  
+    os.makedirs(path, exist_ok=True)
     output_path = path + "/least_squares_T1.csv"
     hl.create_csv_submission(test_ids, y_test_pred, output_path)
     print("Submission file saved.")
@@ -708,7 +719,7 @@ def train_reg_logistic_regression(
     y_test = 2 * y_test_binary - 1
 
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
-    os.makedirs(path, exist_ok=True)  
+    os.makedirs(path, exist_ok=True)
     output_path = path + "/reg-logistic-regression_T1.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
@@ -764,16 +775,17 @@ def train_reg_logistic_regression(
 
 
 def train_logistic_regression(
-        y_train,
-        x_train,
-        x_test,
-        test_ids,
-        gammas = [0.1],
-        max_iters=2000,                                  
-        k_fold=4,
-        threshold=0.2,
-        seed=42,
-        save_plots=False):
+    y_train,
+    x_train,
+    x_test,
+    test_ids,
+    gammas=[0.1],
+    max_iters=2000,
+    k_fold=4,
+    threshold=0.2,
+    seed=42,
+    save_plots=False,
+):
     """
     Train a logistic regression model with hyperparameter tuning
     using k-fold cross-validation, then generate predictions for the test set.
@@ -861,7 +873,7 @@ def train_logistic_regression(
 
     # Save submission file
     path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
-    os.makedirs(path, exist_ok=True) 
+    os.makedirs(path, exist_ok=True)
     output_path = path + "/logistic-regression_T1.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
@@ -880,17 +892,17 @@ def train_logistic_regression(
         )
 
 
-
 def train_ridge_regression(
-        y_train,
-        x_train,
-        x_test,
-        test_ids,
-        lambdas = np.logspace(-5, -1, 4),                                
-        k_fold=4,
-        threshold=0.2,
-        seed=42,
-        save_plots=False):
+    y_train,
+    x_train,
+    x_test,
+    test_ids,
+    lambdas=np.logspace(-5, -1, 4),
+    k_fold=4,
+    threshold=0.2,
+    seed=42,
+    save_plots=False,
+):
     """
     Train a ridge regression model with hyperparameter tuning
     using k-fold cross-validation, then generate predictions for the test set.
@@ -989,6 +1001,7 @@ def train_ridge_regression(
             "Ridge_Reg",
             best_lambda,
         )
+
 
 def knn_predict(x_train, y_train, x_test, k=3, factor=1):
     """
@@ -1093,8 +1106,10 @@ def train_knn(
         y_test_pred = knn_predict(x_train, y_train, x_test, best_k, best_factor)
 
         # Create and save submission file
-        path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
-        os.makedirs(path, exist_ok=True)  
+        path = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "submission_files"
+        )
+        os.makedirs(path, exist_ok=True)
         output_path = path + "/knn_T1.csv"
         hl.create_csv_submission(test_ids, y_test_pred, output_path)
         print("Submission file saved at:", output_path)
@@ -1118,13 +1133,13 @@ def train_knn(
 # ---------------------------------------------------------------------------------------------------------------------------------
 
 
-# ---------------------------- Results in Table 2 (different data preprocessing) ---------------------------------------------------------    
+# ---------------------------- Results in Table 2 (different data preprocessing) ---------------------------------------------------------
 # x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
-# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)            
+# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
 
-#threshold features: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229       
-#threshold features: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
-                    #std (threshold=3), mode: F1: 0.4305
+# threshold features: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229
+# threshold features: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
+# std (threshold=3), mode: F1: 0.4305
 # ----------------------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -1132,5 +1147,19 @@ def train_knn(
 # x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
 # train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8  ,threshold_points = 0.5, normalize = True, outlier_strategy= 'smart', fill_method='mode')
-train_logistic_regression(y_train,x_train,x_test,test_ids,gammas = np.logspace(-3,-1,6),max_iters=1000,save_plots = True)
+x_train, y_train, x_test, train_ids, test_ids = prepare_data(
+    threshold_features=0.8,
+    threshold_points=0.5,
+    normalize=True,
+    outlier_strategy="smart",
+    fill_method="mode",
+)
+train_logistic_regression(
+    y_train,
+    x_train,
+    x_test,
+    test_ids,
+    gammas=np.logspace(-3, -1, 6),
+    max_iters=1000,
+    save_plots=True,
+)

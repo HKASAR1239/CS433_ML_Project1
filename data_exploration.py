@@ -532,9 +532,16 @@ def std_outlier_removal(data, std_threshold=5.0, per_feature_threshold=0.01):
 
 
 # ----------------------------------- DATA PROCESSING -----------------------------------------------------------
-def fill_data(x_train_raw, x_test_raw, y_train_raw,
-                       threshold_features=0.8, threshold_points=0.6,
-                       normalize=True, outlier_strategy='none', fill_method='median'):
+def fill_data(
+    x_train_raw,
+    x_test_raw,
+    y_train_raw,
+    threshold_features=0.8,
+    threshold_points=0.6,
+    normalize=True,
+    outlier_strategy="none",
+    fill_method="median",
+):
     """
     Robust preprocessing pipeline for training and test data.
 
@@ -698,7 +705,9 @@ def fill_data(x_train_raw, x_test_raw, y_train_raw,
 
     return x_train, y_train, x_test
 
+
 # ---------------------------------- TEST FUNCTION FOR OUTLIER STRATEGIES COMPARISON -----------------------------
+
 
 def compare_outlier_strategies(x_train_raw, y_train_raw):
     """
