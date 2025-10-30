@@ -1123,6 +1123,9 @@ def train_knn(
 # ----------------------------------------------------------------------------------------------------------------------------------------------
 
 
-# ---------------------------- Best result: (final submission) ---------------------------------------------------------
-x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
+# # ---------------------------- Best result: (final submission) ---------------------------------------------------------
+# x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
+# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
+
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8  ,threshold_points = 0.5, normalize = True, outlier_strategy= 'smart', fill_method='mode')
+train_logistic_regression(y_train,x_train,x_test,test_ids,gammas = np.logspace(-3,-1,6),max_iters=1000,save_plots = True)

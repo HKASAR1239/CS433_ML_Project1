@@ -42,7 +42,6 @@ This project implements binary classification to predict cardiovascular disease 
 ---
 
 ## Project Structure
-
 ```
 .
 ├── run.py                          # Main script: trains model & generates predictions
@@ -50,19 +49,38 @@ This project implements binary classification to predict cardiovascular disease 
 ├── data_exploration.py             # Data preprocessing & cross-validation utilities
 ├── helpers.py                      # Utility functions (given)
 ├── requirements.txt                # Python dependencies
-├── data/dataset/                   # Training and test data (CSV files)
-│   ├── x_train.csv
-│   ├── y_train.csv
-│   └── x_test.csv
-├── plots/                          # Visualization outputs
-│   ├── Missing_data.png
-│   ├── Missing_features.png
-│   ├── KNN_F1_Scores.png
-│   ├── least_squares_*.png
-│   ├── Log_Reg_*.png
-│   ├── MSE_GD_*.png
-│   └── MSE_SGD_*.png
-└── submission.csv                  # Output predictions
+├── README.md                       # Project documentation
+├── project1_description.pdf        # Project assignment description
+├── submission.csv                  # Final predictions for submission
+│
+├── data/                           # Data directory
+│   └── dataset/                    # Training and test data (CSV files)
+│       ├── x_train.csv             # Training features
+│       ├── y_train.csv             # Training labels (-1, 1)
+│       ├── x_test.csv              # Test features
+│       └── sample_submission.csv   # Example submission format (given)
+│
+├── plots/                          # Visualization outputs from experiments
+│   ├── Missing_data.png            # Missing data analysis
+│   ├── Missing_features.png        # Feature missingness visualization
+│   ├── KNN_F1_Scores.png           # KNN hyperparameter tuning results
+│   ├── least_squares_*.png         # Least squares threshold tuning
+│   ├── Log_Reg_*.png               # Logistic regression experiments
+│   ├── MSE_GD_*.png                # Gradient descent experiments
+│   ├── MSE_SGD_*.png               # Stochastic gradient descent experiments
+│   └── ... (other experimental plots)
+│
+├── grading_tests/                  # Given grading tests
+│   ├── test_project1_public.py     
+│   ├── conftest.py                 
+│   ├── environment.yml             
+│   └── INSTRUCTIONS.md             
+│
+└── ML_Project_1_AUGAXIA/           # Report materials (LaTeX source, figures)
+    ├── references.bib              # Bibliography for report
+    ├── Log_Reg_F1_VS_gamma.png     # Figures for report
+    └── untitled folder/
+        └── latex-template.tex      # LaTeX report source
 ```
 
 ---
