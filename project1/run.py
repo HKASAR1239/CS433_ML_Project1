@@ -11,9 +11,9 @@ THRESHOLD_FEATURES = 0.8
 THRESHOLD_POINTS = 0.6
 NORMALIZE = True
 REMOVE_OUTLIERS = False
-MAX_ITERS = 5000
+MAX_ITERS = 2000
 GAMMA = 0.1
-LAMBDA = 0.001
+LAMBDA = 1e-6
 
 # ----------------------------------- DATA PROCESSING -----------------------------------------------------------
 def prepare_data(threshold_features=0.8, threshold_points=0.6, normalize=True, outlier_strategy='smart', fill_method='median'):
@@ -566,9 +566,10 @@ def train_least_squares(y_train, x_train, x_test, test_ids, save_plots=False):
     )
 
     # Save submission
-    output_path = "submission_least-squares.csv"
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+    output_path = path + "/least_squares_T1.csv"
     hl.create_csv_submission(test_ids, y_test_pred, output_path)
-    print(f"Submission file saved to: {output_path}")
+    print("Submission file saved.")
 
 
 def train_reg_logistic_regression(
@@ -654,10 +655,7 @@ def train_reg_logistic_regression(
                     gamma=gamma,
                 )
                 x = X_val @ w
-                print(x[0:10])
                 f1, _, _, _ = compute_f1_score(y_val, X_val, w, threshold)
-                print(f1)
-                print(loss)
                 f1_scores.append(f1)
 
             mean_f1 = np.mean(f1_scores)
@@ -707,8 +705,8 @@ def train_reg_logistic_regression(
     y_test_binary = (y_test_prob >= threshold).astype(int)
     y_test = 2 * y_test_binary - 1
 
-    path = os.path.dirname(os.path.realpath(__file__))
-    output_path = path + "/submission_reg-logistic-regression.csv"
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+    output_path = path + "/reg-logistic-regression_T1.csv"
     hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
     # ---- Plot F1 scores only ----
@@ -833,7 +831,6 @@ def train_logistic_regression(
             )
 
             f1, _, _, _ = compute_f1_score(y_val, X_val, w, threshold)
-            print(f1)
             fold_f1s.append(f1)
 
         mean_f1 = np.mean(fold_f1s)
@@ -858,7 +855,11 @@ def train_logistic_regression(
     y_test_prob = impl._sigmoid(x_test_bias @ final_w)
     y_test_binary = (y_test_prob >= threshold).astype(int)
     y_test = 2 * y_test_binary - 1
-    hl.create_csv_submission(test_ids, y_test, "submission-logistic-regression.csv")
+
+    # Save submission file
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+    output_path = path + "/logistic-regression_T1.csv"
+    hl.create_csv_submission(test_ids, y_test, output_path)
     print("Submission file saved.")
 
     # ---- Plot F1 vs gamma ----
@@ -949,7 +950,7 @@ def train_ridge_regression(
             best_lambda = lambda_
 
     print(
-        f"Best lambda: {best_lambda}, mean validation loss: {best_loss:.4f}, mean F1: {mean_f1s[lambdas.tolist().index(best_lambda)]:.4f}"
+        f"Best lambda: {best_lambda}, mean validation loss: {best_loss:.4f}, mean F1: {mean_f1s[lambdas.index(best_lambda)]:.4f}"
     )
 
     # Retrain on full training data
@@ -984,11 +985,6 @@ def train_ridge_regression(
             "Ridge_Reg",
             best_lambda,
         )
-
-    # Final prediction by majority vote
-    #y_pred = np.where(y_pred >= 0, 1, -1)
-    #return y_pred
-
 
 def knn_predict(x_train, y_train, x_test, k=3, factor=1):
     """
@@ -1093,8 +1089,8 @@ def train_knn(
         y_test_pred = knn_predict(x_train, y_train, x_test, best_k, best_factor)
 
         # Create and save submission file
-        output_path = os.path.dirname(os.path.realpath(__file__))
-        output_path += "/submission_knn_1.csv"
+        path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "submission_files")
+        output_path = path + "/knn_T1.csv"
         hl.create_csv_submission(test_ids, y_test_pred, output_path)
         print("Submission file saved at:", output_path)
 
@@ -1103,24 +1099,30 @@ def train_knn(
 
 # ----------------------------------- TRAINING & EVALUATION ---------------------------------------------------------
 
-x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
+
+# ----------------------------------- Results in Table 1 ---------------------------------------------------------
+# x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
 
 # train_mean_square_error_gd(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=np.logspace(-3,0.1,3),k_fold=4,threshold=0.2,save_plots=True)
 # train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=np.logspace(-4,-1,10),k_fold=4,threshold=0.2,save_plots=True)
-# train_least_squares(y_train,x_train,x_test,test_ids, save_plots=True)
-train_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=[0.02, 0.05, 0.08], k_fold=4,threshold=0.2, save_plots=True)
-# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-5, 1e-4],gammas=[0.1, 0.05, 0.01], threshold=0.2, k_fold=4, save_plots=True)
+# train_least_squares(y_train,x_train,x_test,test_ids, save_plots=False)
+# train_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=[0.02, 0.05, 0.08], k_fold=4,threshold=0.2, save_plots=False)
+# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-5, 1e-4],gammas=[0.1, 0.05, 0.01], threshold=0.2, k_fold=4, save_plots=False)
 # train_ridge_regression(y_train,x_train,x_test,test_ids,lambdas=[1e-5, 1e-4, 1e-3, 1e-2], k_fold=4, threshold=0.2, save_plots=True)
+# train_knn(y_train,x_train,x_test,test_ids,ks=[30],factors=[9], k_fold=1, create_submission_file=True)
+# ---------------------------------------------------------------------------------------------------------------------------------
 
-#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=True)            
-#threshold: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229       
-#threshold: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
+
+# ---------------------------- Results in Table 2 (different data preprocessing) ---------------------------------------------------------    
+# x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
+# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=5000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)            
+
+#threshold features: 0.5     #smart, median: F1: 0.4296                       #aggressive, median: F1 : 0.4293           #smart, mode: F1: 0.4298                #none, mode: F1: 0.4229       
+#threshold features: 0.8     #smart, median: F1: 0.4314                       #smart, median: F1 : 0.4309                #std (threshold=5), mode: F1: 0.4304
                     #std (threshold=3), mode: F1: 0.4305
-#-- best so far: smart, mode, threshold 0.8
+# ----------------------------------------------------------------------------------------------------------------------------------------------
 
 
-# x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.5,threshold_points = 0.5, normalize = True, remove_outliers = False, aberrant_threshold=1000)
-# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4)                            #F1 : 0.413
-
-train_mean_square_error_gd(y_train,x_train,x_test,test_ids,gammas=np.logspace(-8,-3,10),max_iters=1000,save_plots=True)
-#train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,save_plots=True)
+# ---------------------------- Best result: (final submission) ---------------------------------------------------------
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
+train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
