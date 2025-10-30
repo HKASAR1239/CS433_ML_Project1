@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Virtual Environment
+venv/
+venv_project1/
+ENV/
+env/
+
+# IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Testing
+.pytest_cache/
+
+# OS
+Thumbs.db
+
+# Old submissions
+submission_v*.csv
