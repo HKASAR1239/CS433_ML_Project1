@@ -686,8 +686,22 @@ def train_reg_logistic_regression(
         lambda_=best_lambda,
         initial_w=initial_w,
         max_iters=max_iters,
-        gamma=best_gamma,
+        gamma=best_gamma,             
     )
+    # Save model parameters in submission_files
+    submission_dir = "submission_files"
+    os.makedirs(submission_dir, exist_ok=True)
+    model_path = os.path.join(submission_dir, "reg_logistic_regression_model.txt")
+
+    with open(model_path, "w") as f:
+        f.write(f"best_gamma: {best_gamma}\n")
+        f.write(f"best_lambda:{best_lambda}")
+        f.write(f"threshold: {threshold}\n")
+        f.write(f"num_features: {len(final_w)}\n")
+        f.write("weights:\n")
+        np.savetxt(f, final_w)
+
+    print(f"Model saved to {model_path}")
 
     # Training set predictions
     y_train_prob = impl._sigmoid(x_train_bias @ final_w)
@@ -730,47 +744,49 @@ def train_reg_logistic_regression(
         gammas_arr = np.array([t[1] for t in plot_data])
         f1_arr = np.array([t[2] for t in plot_data])
 
-        # Example: F1 vs gamma for fixed best lambda
-        mask = lambdas_arr == best_lambda
-        plt.figure()
-        plt.plot(gammas_arr[mask], f1_arr[mask], marker="o")
-        plt.axvline(best_gamma, color="r", linestyle="--", label="Best gamma")
-        plt.xlabel("Gamma")
-        plt.ylabel("F1 score")
-        plt.title("Regularized Logistic Regression: F1 vs Gamma")
-        plt.grid(True)
+            # Get unique sorted values
+        unique_lambdas = np.unique(lambdas_arr)
+        unique_gammas = np.unique(gammas_arr)
+
+        # Reshape f1 scores into grid (assuming nested-loop order)
+        f1_scores = f1_arr.reshape(len(unique_gammas), len(unique_lambdas))
+
+        plt.figure(figsize=(8,6))
+        im = plt.imshow(
+            f1_scores,
+            extent=[unique_lambdas.min(), unique_lambdas.max(),
+                    unique_gammas.min(), unique_gammas.max()],
+            origin='lower',
+            aspect='auto',
+            cmap='viridis'
+        )
+
+        plt.colorbar(im, label='F1 score')
+        plt.xlabel('Lambda (regularization strength)', fontsize=19)
+        plt.ylabel('Gamma (learning rate)', fontsize=19)
+        plt.xticks(fontsize=16)
+        plt.yticks(fontsize=16)
+        plt.title('F1 score vs. (Gamma, Lambda)')
         plt.tight_layout()
-        plt.savefig(path + "/f1.png")
-        print("Saved plot: reg_logistic_F1_VS_gamma.png")
+        plt.savefig(path + "/plots/reg_log_heatmap.png")
+        print(" Saved plot: reg_log_heatmap.png")
         plt.close()
 
-        # Plot the prediction distribution on training and test sets with transparent histograms
+        # F1 vs gamma for fixed best lambda
+        mask = np.isclose(lambdas_arr, best_lambda, rtol=1e-6)
         plt.figure()
-        plt.hist(
-            y_train_prob,
-            bins=30,
-            alpha=0.5,
-            label="Train Predictions",
-            color="blue",
-            density=True,
-        )
-        plt.hist(
-            y_test_prob,
-            bins=30,
-            alpha=0.5,
-            label="Test Predictions",
-            color="orange",
-            density=True,
-        )
-        plt.axvline(threshold, color="r", linestyle="--", label="Threshold")
-        plt.xlabel("Predicted Probability")
-        plt.ylabel("Density")
-        plt.title("Prediction Distribution on Train and Test Sets")
-        plt.legend()
+        plt.plot(gammas_arr[mask], f1_arr[mask], marker="o")
+        plt.axvline(best_gamma, color="r", linestyle="--", label=f"Best gamma : {best_gamma:.3f}")
+        plt.xlabel("Gamma",fontsize=19)
+        plt.ylabel("F1 score",fontsize=19)
+        plt.xticks(fontsize=16) 
+        plt.yticks(fontsize=16) 
+        plt.title(f"Regularized Logistic Regression: F1 vs Gamma for Lambda = {best_lambda:4f}")
         plt.grid(True)
+        plt.legend()
         plt.tight_layout()
-        plt.savefig(path + "/Pred_distr.png")
-        print("Saved plot: reg_logistic_prediction_distribution.png")
+        plt.savefig(path +"/plots/reg_logistic_F1_VS_gamma.png")
+        print("Saved plot: reg_logistic_F1_VS_gamma.png")
         plt.close()
 
 
@@ -1116,18 +1132,93 @@ def train_knn(
 
     return plot_f1_scores, parameters
 
+def load_model_reg_log(model_path="submission_files/reg_logistic_regression_model.txt"):
+    """
+    Load a pretrained regularized logistic regression model from disk.
+
+    Returns:
+        dict with keys:
+            - 'weights': numpy array of weights
+            - 'best_gamma': float
+            - 'best_lambda': float
+            - 'threshold': float
+    """
+    params = {}
+    weights = []
+    reading_weights = False
+
+    with open(model_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith("best_gamma:"):
+                params["best_gamma"] = float(line.split(":")[1].strip())
+            elif line.startswith("best_lambda:"):
+                params["best_lambda"] = float(line.split(":")[1].strip())
+            elif line.startswith("threshold:"):
+                params["threshold"] = float(line.split(":")[1].strip())
+            elif line.startswith("weights:"):
+                reading_weights = True
+            elif reading_weights:
+                try:
+                    weights.append(float(line))
+                except ValueError:
+                    pass  # ignore malformed lines
+
+    params["weights"] = np.array(weights)
+    print(f"Loaded model: γ={params['best_gamma']}, λ={params['best_lambda']}, threshold={params['threshold']}")
+    print(f"Number of weights: {len(params['weights'])}")
+
+    return params
+
+
+def predict_reg_log(x_test, model_params, test_ids=None, save_csv=True, output_path="submission_files/reg_logistic_inference.csv"):
+    """
+    Run inference using a pretrained regularized logistic regression model.
+
+    Inputs:
+        - x_test: np.ndarray, test features (no bias term yet)
+        - model_params: dict, as returned by load_model_reg_log()
+        - test_ids: np.ndarray, optional (for saving submission)
+        - save_csv: bool, whether to write predictions to a CSV
+        - output_path: str, where to save the CSV if save_csv=True
+
+    Returns:
+        - y_pred: np.ndarray, predicted labels in {-1, 1}
+    """
+    # Add bias column
+    x_test_bias = np.c_[np.ones(x_test.shape[0]), x_test]
+    w = model_params["weights"]
+    threshold = model_params["threshold"]
+
+    # Compute probabilities and predictions
+    y_prob = impl._sigmoid(x_test_bias @ w)
+    y_bin = (y_prob >= threshold).astype(int)
+    y_pred = 2 * y_bin - 1
+
+    print(f"Predictions: {np.mean(y_pred == 1) * 100:.2f}% of samples classified as +1")
+
+    # Save to CSV if requested
+    if save_csv and test_ids is not None:
+        import helpers as hl
+        hl.create_csv_submission(test_ids, y_pred, output_path)
+        print(f"Saved predictions to {output_path}")
+
+    return y_pred
+
 
 # ----------------------------------- TRAINING & EVALUATION ---------------------------------------------------------
 
 
 # ----------------------------------- Results in Table 1 ---------------------------------------------------------
-# x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
+x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
 
 # train_mean_square_error_gd(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=np.logspace(-3,0.1,3),k_fold=4,threshold=0.2,save_plots=True)
 # train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=np.logspace(-4,-1,10),k_fold=4,threshold=0.2,save_plots=True)
 # train_least_squares(y_train,x_train,x_test,test_ids, save_plots=False)
 # train_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=[0.02, 0.05, 0.08], k_fold=4,threshold=0.2, save_plots=False)
-# train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-5, 1e-4],gammas=[0.1, 0.05, 0.01], threshold=0.2, k_fold=4, save_plots=False)
+train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-5, 1e-4],gammas=[0.1, 0.05, 0.01], threshold=0.2, k_fold=4, save_plots=False)
 # train_ridge_regression(y_train,x_train,x_test,test_ids,lambdas=[1e-5, 1e-4, 1e-3, 1e-2], k_fold=4, threshold=0.2, save_plots=True)
 # train_knn(y_train,x_train,x_test,test_ids,ks=[30],factors=[9], k_fold=1, create_submission_file=True)
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -1147,19 +1238,7 @@ def train_knn(
 # x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
 # train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
 
-x_train, y_train, x_test, train_ids, test_ids = prepare_data(
-    threshold_features=0.8,
-    threshold_points=0.5,
-    normalize=True,
-    outlier_strategy="smart",
-    fill_method="mode",
-)
-train_logistic_regression(
-    y_train,
-    x_train,
-    x_test,
-    test_ids,
-    gammas=np.logspace(-3, -1, 6),
-    max_iters=1000,
-    save_plots=True,
-)
+
+# Reproducibility using inference.
+#params = load_model_reg_log("submission_files/reg_logistic_regression_model.txt")
+#predict_reg_log(x_test,params,test_ids,save_csv=True)
