@@ -1173,7 +1173,7 @@ def load_model_reg_log(model_path="submission_files/reg_logistic_regression_mode
     return params
 
 
-def predict_reg_log(x_test, model_params, test_ids=None, save_csv=True, output_path="submission_files/reg_logistic_inference.csv"):
+def predict_reg_log(x_test, model_params, test_ids=None, save_csv=True, output_path="submission.csv"):
     """
     Run inference using a pretrained regularized logistic regression model.
 
@@ -1218,7 +1218,7 @@ x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0
 # train_mean_square_error_sgd(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=np.logspace(-4,-1,10),k_fold=4,threshold=0.2,save_plots=True)
 # train_least_squares(y_train,x_train,x_test,test_ids, save_plots=False)
 # train_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,gammas=[0.02, 0.05, 0.08], k_fold=4,threshold=0.2, save_plots=False)
-train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-5, 1e-4],gammas=[0.1, 0.05, 0.01], threshold=0.2, k_fold=4, save_plots=False)
+#train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6, 1e-5, 1e-4],gammas=[0.1, 0.05, 0.01], threshold=0.2, k_fold=4, save_plots=False)
 # train_ridge_regression(y_train,x_train,x_test,test_ids,lambdas=[1e-5, 1e-4, 1e-3, 1e-2], k_fold=4, threshold=0.2, save_plots=True)
 # train_knn(y_train,x_train,x_test,test_ids,ks=[30],factors=[9], k_fold=1, create_submission_file=True)
 # ---------------------------------------------------------------------------------------------------------------------------------
