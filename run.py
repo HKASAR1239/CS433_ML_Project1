@@ -1240,5 +1240,5 @@ train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lam
 
 
 # Reproducibility using inference.
-#params = load_model_reg_log("submission_files/reg_logistic_regression_model.txt")
-#predict_reg_log(x_test,params,test_ids,save_csv=True)
+params = load_model_reg_log("submission_files/reg_logistic_regression_model.txt")
+predict_reg_log(x_test,params,test_ids,save_csv=True)
