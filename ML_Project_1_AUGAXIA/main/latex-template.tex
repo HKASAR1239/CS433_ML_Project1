@@ -78,7 +78,7 @@ Lowering the feature threshold from 0.8 to 0.5 resulted in reduced performance (
 
 
 \subsection{Models Comparison and Final Model Performance}
-Multiple models introduced earlier were compared under their best hyperparameters using four-fold cross-validation - except for the least squares. The mean F1 scores in training and validation is  summarized in Table~\ref{tab:models_comparison} in Appendix.  Informally, Logistic Regression yielded the best F1 score, with a validation F1 score of 0.438, closely followed by the Regularized Logistic Regression model with 0.437. Officially, the best model is Regularized Logistic Regression, as the parameters to reach 0.438 with the Logistic Regression were lost. Logistic-based models substantially outperform linear models, which yield F1 scores at most 0.16 in the case of the LSE model or 0.137 in the case of MSE SGD model. 
+Multiple models introduced earlier were compared under their best hyperparameters using four-fold cross-validation - except for the least squares. The mean F1 scores in training and validation is  summarized in Table~\ref{tab:models_comparison} in Appendix.  Regularized Logistic Regression yielded the best F1 score, with a validation F1 score of 0.439, closely followed by the Logistic Regression model with 0.438.  Logistic-based models substantially outperform linear models, which yield F1 scores at most 0.16 in the case of the LSE model or 0.137 in the case of MSE SGD model. 
 GD and Ridge achieved F1 scores below 0.05. This dramatic difference stems from the fundamental mismatch between MSE optimization and binary classification: MSE treats all errors symmetrically, whereas classification requires learning decision boundaries. The severe class imbalance further amplifies this issue, as MSE methods default to predicting the majority class.
 
 KNN achieved moderate performance (train F1 = 0.318, see Fig.\ref{fig:KNN}) but was limited by the curse of dimensionality. With many features, distance-based methods become less effective. The weighted voting scheme (factor=9 for positive class) partially addressed class imbalance but could not fully overcome the high-dimensional challenge.
@@ -103,25 +103,31 @@ Several important lessons emerged from this project:
 
 \section{Conclusion}
 
-This project successfully applied ML to cardiovascular disease prediction, implementing six algorithms from scratch and achieving validation F1 score of 0.437 with regularized logistic regression. The systematic comparison revealed that probabilistic classifiers substantially outperform regression-based methods for imbalanced classification tasks.
+This project successfully applied ML to cardiovascular disease prediction, implementing six algorithms from scratch and achieving validation F1 score of 0.439 with Regularized Logistic Regression. The systematic comparison revealed that probabilistic classifiers substantially outperform regression-based methods for imbalanced classification tasks.
 
 Future work could explore ensemble methods to combine multiple models, feature selection techniques to identify the most predictive health indicators, and more sophisticated handling of missing data. Additionally, investigating model interpretability would provide valuable insights into which health factors most strongly predict CVD risk, potentially informing clinical decision-making.
 
+
 \clearpage
+\onecolumn 
 \section{Appendix}
 
-
 \begin{figure}[h]
+  \centering
+  \begin{minipage}{0.48\textwidth}
     \centering
-    \includegraphics[width=0.4\textwidth]{Missing_data.png}  
-
+    \includegraphics[width=\linewidth]{Missing_data.png}  
     \caption{Percentage of missing data per feature}
-
     \label{fig:missing}  
-
+  \end{minipage}
+  \hfill
+  \begin{minipage}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{KNN_F1_Scores_CV1.png}  
+    \caption{KNN F1 score versus number of neighbors $k$ and the weighting factors for positive class.}
+    \label{fig:KNN}  
+  \end{minipage}
 \end{figure}
-
-
 
 \vspace{0.5cm}
 
@@ -143,6 +149,8 @@ Future work could explore ensemble methods to combine multiple models, feature s
 \label{tab:preprocessing_strategies}
 \end{minipage}
 
+\vspace{0.5cm}
+
 \noindent\begin{minipage}{\textwidth}
 \centering
 \begin{tabular}[c]{|l||l|l|l|}
@@ -153,7 +161,7 @@ Future work could explore ensemble methods to combine multiple models, feature s
   MSE SGD & 0.1426 & 0.137 [AICrowd] & $\gamma=0.0046$ \\
   LSE & 0.4220 & 0.16 [AICrowd] & - \\
   Logistic & 0.4259 & 0.438 [AICrowd] & $\gamma=0.08$ \\
-  Reg. Logistic & 0.4291 &  0.437 [AICrowd] & $\gamma=0.1$, $\lambda=10^{-6}$ \\
+  Reg. Logistic & 0.4291 &  0.439 [AICrowd] & $\gamma=0.1$, $\lambda=10^{-6}$ \\
   Ridge & 0.0275 & 0.033 [AICrowd] & $\lambda=10^{-5}$ \\
   KNN & 0.3258 & 0.3181 [estimated] & $k=30$, factor$=9$ \\
   \hline
@@ -162,24 +170,11 @@ Future work could explore ensemble methods to combine multiple models, feature s
 \label{tab:models_comparison}
 \end{minipage}
 
-\vspace{0.3 cm}
-
-\begin{figure}
-    \centering
-    \includegraphics[width=0.4\textwidth]{KNN_F1_Scores_CV1.png}  
-
-    \caption{KNN F1 score versus number of neighbors $k$ and the weighting factors for positive class.}
-
-    \label{fig:KNN}  
-
-\end{figure}
-
-
-
-\end{document}
+\vspace{0.3cm}
 
 \bibliographystyle{IEEEtran}
 \begin{thebibliography}{1}
 \bibitem{brfss}
-Centers for Disease Control and Prevention, ``Behavioral Risk Factor Surveillance System,'' 2015. [Online]. Available: https://www.cdc.gov/brfss/
+Centers for Disease Control and Prevention, ``Behavioral Risk Factor Surveillance System,'' 2015. [Online]. Available: \url{https://www.cdc.gov/brfss/}
 \end{thebibliography}
+\end{document}
