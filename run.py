@@ -1239,6 +1239,6 @@ train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lam
 # train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
 
 
-# Reproducibility using inference.
+# Reproducibility using inference. The submission file will be available at submission_files/reg_logistic_inference.csv
 params = load_model_reg_log("submission_files/reg_logistic_regression_model.txt")
 predict_reg_log(x_test,params,test_ids,save_csv=True)
