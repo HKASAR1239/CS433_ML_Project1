@@ -1238,7 +1238,7 @@ x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0
 # x_train,y_train,x_test,train_ids, test_ids = prepare_data(threshold_features = 0.8,threshold_points = 0.5, normalize = True, outlier_strategy='smart', fill_method='mode')
 # train_reg_logistic_regression(y_train,x_train,x_test,test_ids,max_iters=2000,lambdas=[1e-6],gammas=[0.1], threshold=0.2, k_fold=4, save_plots=False)
 
-
+# lambda = 1e-6, gamma = 0.1, max_iters = 2000 => F1 = 0.439 on AICrowd
 # Reproducibility using inference. The submission file will be available at submission_files/reg_logistic_inference.csv
 params = load_model_reg_log("submission_files/reg_logistic_regression_model.txt")
 predict_reg_log(x_test,params,test_ids,save_csv=True)
